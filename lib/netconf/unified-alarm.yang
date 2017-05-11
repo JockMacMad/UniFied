@@ -1,0 +1,22 @@
+module alarm {
+    prefix "";
+    namespace "unified";
+    revision 0;
+
+    container Alarm {
+        leaf UUID {
+            mandatory   "true";
+            config      "false";
+            type        yang:uuid;
+        }
+        leaf Archived {
+            config      "false";
+            type        boolean;
+        }
+        leaf Essid {
+            config      "false";
+            type        string;
+        }
+    }
+}
+
