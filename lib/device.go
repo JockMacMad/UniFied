@@ -135,7 +135,7 @@ type PortOverrides struct {
 type PortTable struct {
 	IsAggregatedBy          bool   `json:"aggregated_by,omitempty"`
 	IsAutoNegEnabled        bool   `json:"autoneg,omitempty"`
-	BytesR		        int64   `json:"bytes-r,omitempty"`
+	BytesR                  int64  `json:"bytes-r,omitempty"`
 	Dot1xMode               string `json:"dot1x_mode,omitempty"`
 	Dot1xStatus             string `json:"dot1x_status,omitempty"`
 	IsEnabled               bool   `json:"enable,omitempty"`
@@ -158,28 +158,28 @@ type PortTable struct {
 	POEPower                string `json:"poe_power,omitempty"`
 	POEVoltage              string `json:"poe_voltage,omitempty"`
 	PortIdx                 int    `json:"port_idx,omitempty"`
-	IsPortPOE		bool	`json:"port_poe,omitempty"`
+	IsPortPOE               bool   `json:"port_poe,omitempty"`
 	PortConfId              string `json:"portconf_id,omitempty"`
-	RXBroadcast		int64 	`json:"rx_broadcast,omitempty"`
-	RXBytes			int64	`json:"rx_bytes,omitempty"`
-	RXBytesR		int64	`json:"rx_bytes-r,omitempty"`
-	RXDropped		int64 	`json:"rx_dropped,omitempty"`
-	RXErrors		int64 	`json:"rx_errors,omitempty"`
-	RXMulticast		int64 	`json:"rx_multicast,omitempty"`
-	RXPackets		int64 	`json:"rx_packets,omitempty"`
-	PortSpeed               int `json:"speed,omitempty"`
+	RXBroadcast             int64  `json:"rx_broadcast,omitempty"`
+	RXBytes                 int64  `json:"rx_bytes,omitempty"`
+	RXBytesR                int64  `json:"rx_bytes-r,omitempty"`
+	RXDropped               int64  `json:"rx_dropped,omitempty"`
+	RXErrors                int64  `json:"rx_errors,omitempty"`
+	RXMulticast             int64  `json:"rx_multicast,omitempty"`
+	RXPackets               int64  `json:"rx_packets,omitempty"`
+	PortSpeed               int    `json:"speed,omitempty"`
 	IsStormCtrlBcastEnabled bool   `json:"stormctrl_bcast_enabled,omitempty"`
 	IsStormCtrlMcastEnabled bool   `json:"stormctrl_mcast_enabled,omitempty"`
 	IsStormCtrlUcastEnabled bool   `json:"stormctrl_ucast_enabled,omitempty"`
 	STPPathCost             int    `json:"stp_pathcost,omitempty"`
 	STPState                string `json:"stp_state,omitempty"`
-	TXBroadcast		int64 	`json:"tx_broadcast,omitempty"`
-	TXBytes			int64	`json:"tx_bytes,omitempty"`
-	TXBytesR		int64	`json:"tx_bytes-r,omitempty"`
-	TXDropped		int64 	`json:"tx_dropped,omitempty"`
-	TXErrors		int64 	`json:"tx_errors,omitempty"`
-	TXMulticast		int64 	`json:"tx_multicast,omitempty"`
-	TXPackets		int64 	`json:"tx_packets,omitempty"`
+	TXBroadcast             int64  `json:"tx_broadcast,omitempty"`
+	TXBytes                 int64  `json:"tx_bytes,omitempty"`
+	TXBytesR                int64  `json:"tx_bytes-r,omitempty"`
+	TXDropped               int64  `json:"tx_dropped,omitempty"`
+	TXErrors                int64  `json:"tx_errors,omitempty"`
+	TXMulticast             int64  `json:"tx_multicast,omitempty"`
+	TXPackets               int64  `json:"tx_packets,omitempty"`
 	IsUp                    bool   `json:"up,omitempty"`
 }
 
@@ -388,7 +388,6 @@ func (s *DevicesServiceOp) GetByMac(ctx context.Context, mac string) (*Device, *
 
 	return &root.Devices[0], resp, err
 }
-
 
 func (d Device) String() string {
 	return Stringify(d)
