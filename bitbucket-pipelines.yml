@@ -3,10 +3,19 @@
 # Only use spaces to indent your .yml configuration.
 # -----
 # You can specify a custom docker image from Docker Hub as your build environment.
-image: golang:1.7
+image: golang:1.8
 
 pipelines:
   default:
+    - step:
+        script: # Modify the commands below to build your repository.
+          - PACKAGE_PATH="${GOPATH}/src/bitbucket.org/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/lib"
+          - mkdir -pv "${PACKAGE_PATH}/lib"
+          - tar -cO --exclude-vcs --exclude=bitbucket-pipelines.yml . | tar -xv -C "${PACKAGE_PATH}/lib"
+          - cd "${PACKAGE_PATH}/lib"
+          - go get -v
+          - go build -v
+          - go test -v
     - step:
         script: # Modify the commands below to build your repository.
           - PACKAGE_PATH="${GOPATH}/src/bitbucket.org/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}"
