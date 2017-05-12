@@ -31,6 +31,8 @@ type SSHConnection struct {
 var ssh_port int
 var ssh_host string
 var ssh_user string
+var table_output bool
+var json_output bool
 
 func main() {
 	app := cli.NewApp()
@@ -191,32 +193,33 @@ func main() {
 					Name:    "ls",
 					Aliases: []string{"list"},
 					Usage:   "Displays a list of known UniFi devices (of all types).",
+					Flags: []cli.Flag{
+						cli.BoolTFlag{
+							Name:        "table, T",
+							Usage:       "Displays device short data in a table on the console.",
+							Destination: &table_output,
+						},
+						cli.BoolFlag{
+							Name:        "json, J",
+							Usage:       "Displays device short data in a JSON on the console.",
+							Destination: &json_output,
+						},
+					},
 					Action: func(c *cli.Context) error {
 						fmt.Println("\nunified devices ls\n")
 						devices, _, err := cx.Devices.ListShort(ctx, "all", nil)
 						if err != nil {
 							return nil
 						}
-						table := tablewriter.NewWriter(os.Stdout)
-						for _, v := range devices {
-							fieldNames := structs.Names(&v)
-							table.SetHeader(fieldNames)
-
-							fieldValues := structs.Values(&v)
-							valuesArray := make([]string, len(fieldValues))
-							for k, w := range fieldValues {
-								switch x := w.(type) {
-								case string:
-									valuesArray[k] = x
-								case bool:
-									valuesArray[k] = strconv.FormatBool(x)
-								case int:
-									valuesArray[k] = strconv.Itoa(x)
-								}
-							}
-							table.Append(valuesArray)
+						if json_output {
+							table_output = false
+							enc := json.NewEncoder(os.Stdout)
+							enc.SetIndent("", "    ")
+							enc.Encode(devices)
 						}
-						table.Render() // Send output
+						if table_output {
+							outputDevicesToTable(devices)
+						}
 						return nil
 					},
 				},
@@ -845,6 +848,29 @@ func main() {
 	}
 
 	app.Run(os.Args)
+}
+func outputDevicesToTable(devices []unified.DeviceShort) {
+	table := tablewriter.NewWriter(os.Stdout)
+	for _, v := range devices {
+		fieldNames := structs.Names(&v)
+		table.SetHeader(fieldNames)
+
+		fieldValues := structs.Values(&v)
+		valuesArray := make([]string, len(fieldValues))
+		for k, w := range fieldValues {
+			switch x := w.(type) {
+			case string:
+				valuesArray[k] = x
+			case bool:
+				valuesArray[k] = strconv.FormatBool(x)
+			case int:
+				valuesArray[k] = strconv.Itoa(x)
+			}
+		}
+		table.Append(valuesArray)
+	}
+	table.Render()
+	// Send output
 }
 
 func wopAction(c *cli.Context) error {
