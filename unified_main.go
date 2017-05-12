@@ -254,13 +254,34 @@ func main() {
 							Name:    "ls",
 							Aliases: []string{"list"},
 							Usage:   "Displays a list of known UniFi USGs.",
+							Flags: []cli.Flag{
+								cli.BoolTFlag{
+									Name:        "table, T",
+									Usage:       "Displays device short data in a table on the console.",
+									Destination: &table_output,
+								},
+								cli.BoolFlag{
+									Name:        "json, J",
+									Usage:       "Displays device short data in JSON on the console.",
+									Destination: &json_output,
+								},
+							},
 							Action: func(c *cli.Context) error {
 								fmt.Println("\nunified devices ugw ls\n")
 								devices, _, err := cx.Devices.ListShort(ctx, "ugw", nil)
 								if err != nil {
 									return nil
 								}
-								table := tablewriter.NewWriter(os.Stdout)
+								if json_output {
+									table_output = false
+									enc := json.NewEncoder(os.Stdout)
+									enc.SetIndent("", "    ")
+									enc.Encode(devices)
+								}
+								if table_output {
+									outputDevicesToTable(devices)
+								}
+/*								table := tablewriter.NewWriter(os.Stdout)
 								for _, v := range devices {
 									fieldNames := structs.Names(&v)
 									table.SetHeader(fieldNames)
@@ -279,7 +300,7 @@ func main() {
 									}
 									table.Append(valuesArray)
 								}
-								table.Render() // Send output
+								table.Render() // Send output*/
 								return nil
 							},
 						},
@@ -316,13 +337,34 @@ func main() {
 							Name:    "ls",
 							Aliases: []string{"list"},
 							Usage:   "Displays a list of known Unifi APs.",
+							Flags: []cli.Flag{
+								cli.BoolTFlag{
+									Name:        "table, T",
+									Usage:       "Displays device short data in a table on the console.",
+									Destination: &table_output,
+								},
+								cli.BoolFlag{
+									Name:        "json, J",
+									Usage:       "Displays device short data in JSON on the console.",
+									Destination: &json_output,
+								},
+							},
 							Action: func(c *cli.Context) error {
 								fmt.Println("\nunified devices uap ls\n")
 								devices, _, err := cx.Devices.ListShort(ctx, "uap", nil)
 								if err != nil {
 									return nil
 								}
-								table := tablewriter.NewWriter(os.Stdout)
+								if json_output {
+									table_output = false
+									enc := json.NewEncoder(os.Stdout)
+									enc.SetIndent("", "    ")
+									enc.Encode(devices)
+								}
+								if table_output {
+									outputDevicesToTable(devices)
+								}
+/*								table := tablewriter.NewWriter(os.Stdout)
 								for _, v := range devices {
 									fieldNames := structs.Names(&v)
 									table.SetHeader(fieldNames)
@@ -341,7 +383,7 @@ func main() {
 									}
 									table.Append(valuesArray)
 								}
-								table.Render() // Send output
+								table.Render() // Send output*/
 								return nil
 							},
 						},
@@ -378,13 +420,34 @@ func main() {
 							Name:    "ls",
 							Aliases: []string{"list"},
 							Usage:   "Displays a list of known Unifi Switches.",
+							Flags: []cli.Flag{
+								cli.BoolTFlag{
+									Name:        "table, T",
+									Usage:       "Displays device short data in a table on the console.",
+									Destination: &table_output,
+								},
+								cli.BoolFlag{
+									Name:        "json, J",
+									Usage:       "Displays device short data in JSON on the console.",
+									Destination: &json_output,
+								},
+							},
 							Action: func(c *cli.Context) error {
 								fmt.Println("\nunified devices usw ls\n")
 								devices, _, err := cx.Devices.ListShort(ctx, "usw", nil)
 								if err != nil {
 									return nil
 								}
-								table := tablewriter.NewWriter(os.Stdout)
+								if json_output {
+									table_output = false
+									enc := json.NewEncoder(os.Stdout)
+									enc.SetIndent("", "    ")
+									enc.Encode(devices)
+								}
+								if table_output {
+									outputDevicesToTable(devices)
+								}
+/*								table := tablewriter.NewWriter(os.Stdout)
 								for _, v := range devices {
 									fieldNames := structs.Names(&v)
 									table.SetHeader(fieldNames)
@@ -403,7 +466,7 @@ func main() {
 									}
 									table.Append(valuesArray)
 								}
-								table.Render() // Send output
+								table.Render() // Send output*/
 								return nil
 							},
 						},
