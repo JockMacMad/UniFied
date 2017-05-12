@@ -75,8 +75,7 @@ func main() {
 	app.HelpName = "Unified - Ubiquiti UniFi Tools"
 	app.Usage = "unified help"
 	app.UsageText = "Unified - demonstrating the available API"
-
-	fmt.Print("\n\n\n" + app.HelpName + "\nVersion :\t" + app.Version + "\n" + app.Copyright + "\n\n")
+	
 
 	app.Flags = []cli.Flag{
 		cli.BoolTFlag{
@@ -201,7 +200,7 @@ func main() {
 						},
 						cli.BoolFlag{
 							Name:        "json, J",
-							Usage:       "Displays device short data in a JSON on the console.",
+							Usage:       "Displays device short data in JSON on the console.",
 							Destination: &json_output,
 						},
 					},
