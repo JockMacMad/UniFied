@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/google/go-querystring/query"
 	"github.com/logmatic/logmatic-go"
+	"github.com/shiena/ansicolor"
 	headerLink "github.com/tent/http-link-go"
 	"golang.org/x/crypto/ssh"
 	"io"
@@ -16,11 +18,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"reflect"
 	"strconv"
-	"os/signal"
-	"github.com/shiena/ansicolor"
-	"bufio"
 )
 
 const (
@@ -294,8 +294,8 @@ func ConnectToSSHHost(user, host string) (*ssh.Client, *ssh.Session, error) {
 
 	//var hostKey ssh.PublicKey
 	sshConfig := &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{ssh.Password(pass)},
+		User:            user,
+		Auth:            []ssh.AuthMethod{ssh.Password(pass)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 

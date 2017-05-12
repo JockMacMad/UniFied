@@ -23,9 +23,9 @@ var (
 )
 
 type SSHConnection struct {
-	Username	string
-	Host		string
-	Port		int
+	Username string
+	Host     string
+	Port     int
 }
 
 var ssh_port int
@@ -221,10 +221,10 @@ func main() {
 					},
 				},
 				cli.Command{
-					Name:    "inspect",
-					Aliases: []string{"info"},
-					Usage:   "View detailed configuration of a running Unifi Device.",
-					ArgsUsage:   "[mac_address]",
+					Name:      "inspect",
+					Aliases:   []string{"info"},
+					Usage:     "View detailed configuration of a running Unifi Device.",
+					ArgsUsage: "[mac_address]",
 					Action: func(c *cli.Context) error {
 						fmt.Println("\nunified devices inspect `mac_address`\n")
 						device, _, err := cx.Devices.GetByMac(ctx, c.Args().Get(0))
@@ -414,10 +414,10 @@ func main() {
 							},
 						},
 						cli.Command{
-							Name:    "inspect",
-							Aliases: []string{"info"},
-							ArgsUsage:   "[mac_address]",
-							Usage:   "View configuration of a running Unifi Switch.",
+							Name:      "inspect",
+							Aliases:   []string{"info"},
+							ArgsUsage: "[mac_address]",
+							Usage:     "View configuration of a running Unifi Switch.",
 							Action: func(c *cli.Context) error {
 								fmt.Println("new task template: ", c.Args().First())
 								return nil
@@ -579,19 +579,19 @@ func main() {
 			Usage:    "Executes a command on a remote device via ssh.",
 			Flags: []cli.Flag{
 				cli.StringFlag{
-					Name: "user, U",
-					Usage:" Connects via SSH using the `USERNAME` supplied.",
+					Name:        "user, U",
+					Usage:       " Connects via SSH using the `USERNAME` supplied.",
 					Destination: &ssh_user,
 				},
 				cli.StringFlag{
-					Name: "mac, M",
-					Usage:" Connects via SSH to the specified `MAC_ADDRESS` device.",
+					Name:        "mac, M",
+					Usage:       " Connects via SSH to the specified `MAC_ADDRESS` device.",
 					Destination: &ssh_host,
 				},
 				cli.IntFlag{
-					Name: "port, P",
-					Usage:" Connects via SSH to the specified `PORT` supplied.",
-					Value: 22,
+					Name:        "port, P",
+					Usage:       " Connects via SSH to the specified `PORT` supplied.",
+					Value:       22,
 					Destination: &ssh_port,
 				},
 			},
@@ -600,12 +600,12 @@ func main() {
 					fmt.Println("exec - Not enough Args passed")
 					return nil
 				}
-				ip_address,  err := cx.Devices.GetIPFromMac(ctx, c.Args().Get(0))
+				ip_address, err := cx.Devices.GetIPFromMac(ctx, c.Args().Get(0))
 				if err != nil {
 					return nil
 				}
 				_, session, err :=
-					unified.ConnectToSSHHost(ssh_user, ip_address+":"+ strconv.Itoa(ssh_port))
+					unified.ConnectToSSHHost(ssh_user, ip_address+":"+strconv.Itoa(ssh_port))
 				if err != nil {
 					panic(err)
 				}
