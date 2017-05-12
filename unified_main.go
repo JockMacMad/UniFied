@@ -211,10 +211,7 @@ func main() {
 							return nil
 						}
 						if json_output {
-							table_output = false
-							enc := json.NewEncoder(os.Stdout)
-							enc.SetIndent("", "    ")
-							enc.Encode(devices)
+							devices = DeviceArrayToJSON(devices)
 						}
 						if table_output {
 							outputDevicesToTable(devices)
@@ -233,9 +230,7 @@ func main() {
 						if err != nil {
 							return nil
 						}
-						enc := json.NewEncoder(os.Stdout)
-						enc.SetIndent("", "    ")
-						enc.Encode(device)
+						DeviceToJSON(device)
 
 						return nil
 					},
@@ -273,34 +268,11 @@ func main() {
 									return nil
 								}
 								if json_output {
-									table_output = false
-									enc := json.NewEncoder(os.Stdout)
-									enc.SetIndent("", "    ")
-									enc.Encode(devices)
+									devices = DeviceArrayToJSON(devices)
 								}
 								if table_output {
 									outputDevicesToTable(devices)
 								}
-/*								table := tablewriter.NewWriter(os.Stdout)
-								for _, v := range devices {
-									fieldNames := structs.Names(&v)
-									table.SetHeader(fieldNames)
-
-									fieldValues := structs.Values(&v)
-									valuesArray := make([]string, len(fieldValues))
-									for k, w := range fieldValues {
-										switch x := w.(type) {
-										case string:
-											valuesArray[k] = x
-										case bool:
-											valuesArray[k] = strconv.FormatBool(x)
-										case int:
-											valuesArray[k] = strconv.Itoa(x)
-										}
-									}
-									table.Append(valuesArray)
-								}
-								table.Render() // Send output*/
 								return nil
 							},
 						},
@@ -317,7 +289,12 @@ func main() {
 							Aliases: []string{"info"},
 							Usage:   "View configuration of a running Unifi USG.",
 							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
+								fmt.Println("\nunified devices ugw inspect `mac_address`\n")
+								device, _, err := cx.Devices.GetByMac(ctx, c.Args().Get(0))
+								if err != nil {
+									return nil
+								}
+								DeviceToJSON(device)
 								return nil
 							},
 						},
@@ -356,34 +333,11 @@ func main() {
 									return nil
 								}
 								if json_output {
-									table_output = false
-									enc := json.NewEncoder(os.Stdout)
-									enc.SetIndent("", "    ")
-									enc.Encode(devices)
+									devices = DeviceArrayToJSON(devices)
 								}
 								if table_output {
 									outputDevicesToTable(devices)
 								}
-/*								table := tablewriter.NewWriter(os.Stdout)
-								for _, v := range devices {
-									fieldNames := structs.Names(&v)
-									table.SetHeader(fieldNames)
-
-									fieldValues := structs.Values(&v)
-									valuesArray := make([]string, len(fieldValues))
-									for k, w := range fieldValues {
-										switch x := w.(type) {
-										case string:
-											valuesArray[k] = x
-										case bool:
-											valuesArray[k] = strconv.FormatBool(x)
-										case int:
-											valuesArray[k] = strconv.Itoa(x)
-										}
-									}
-									table.Append(valuesArray)
-								}
-								table.Render() // Send output*/
 								return nil
 							},
 						},
@@ -400,7 +354,12 @@ func main() {
 							Aliases: []string{"info"},
 							Usage:   "View configuration of a running AP.",
 							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
+								fmt.Println("\nunified devices uap inspect `mac_address`\n")
+								device, _, err := cx.Devices.GetByMac(ctx, c.Args().Get(0))
+								if err != nil {
+									return nil
+								}
+								DeviceToJSON(device)
 								return nil
 							},
 						},
@@ -439,34 +398,11 @@ func main() {
 									return nil
 								}
 								if json_output {
-									table_output = false
-									enc := json.NewEncoder(os.Stdout)
-									enc.SetIndent("", "    ")
-									enc.Encode(devices)
+									devices = DeviceArrayToJSON(devices)
 								}
 								if table_output {
 									outputDevicesToTable(devices)
 								}
-/*								table := tablewriter.NewWriter(os.Stdout)
-								for _, v := range devices {
-									fieldNames := structs.Names(&v)
-									table.SetHeader(fieldNames)
-
-									fieldValues := structs.Values(&v)
-									valuesArray := make([]string, len(fieldValues))
-									for k, w := range fieldValues {
-										switch x := w.(type) {
-										case string:
-											valuesArray[k] = x
-										case bool:
-											valuesArray[k] = strconv.FormatBool(x)
-										case int:
-											valuesArray[k] = strconv.Itoa(x)
-										}
-									}
-									table.Append(valuesArray)
-								}
-								table.Render() // Send output*/
 								return nil
 							},
 						},
@@ -484,7 +420,12 @@ func main() {
 							ArgsUsage: "[mac_address]",
 							Usage:     "View configuration of a running Unifi Switch.",
 							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
+								fmt.Println("\nunified devices usw inspect `mac_address`\n")
+								device, _, err := cx.Devices.GetByMac(ctx, c.Args().Get(0))
+								if err != nil {
+									return nil
+								}
+								DeviceToJSON(device)
 								return nil
 							},
 						},
@@ -910,6 +851,18 @@ func main() {
 	}
 
 	app.Run(os.Args)
+}
+func DeviceToJSON(device *unified.Device) {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "    ")
+	enc.Encode(device)
+}
+func DeviceArrayToJSON(devices []unified.DeviceShort) []unified.DeviceShort {
+	table_output = false
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "    ")
+	enc.Encode(devices)
+	return devices
 }
 func outputDevicesToTable(devices []unified.DeviceShort) {
 	table := tablewriter.NewWriter(os.Stdout)
