@@ -1,7 +1,7 @@
 package main
 
 import (
-	unified "bitbucket.org/unified/lib"
+	unified "bitbucket.org/unified-lib"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -75,7 +75,7 @@ func main() {
 	app.HelpName = "Unified - Ubiquiti UniFi Tools"
 	app.Usage = "unified help"
 	app.UsageText = "Unified - demonstrating the available API"
-	
+
 
 	app.Flags = []cli.Flag{
 		cli.BoolTFlag{
