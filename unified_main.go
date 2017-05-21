@@ -27,9 +27,9 @@ type SSHConnection struct {
 	Port     int
 }
 
-var ssh_port int
-var ssh_host string
-var ssh_user string
+var ssh_portOption bool
+var ssh_hostOption bool
+var ssh_userOption bool
 var table_output bool
 var json_output bool
 var username bool
@@ -366,6 +366,50 @@ func main() {
 						}
 					})
 			})
+	})
+
+	app.Command("exec", "Open a remote SSH Shell.", func(cmd *cli.Cmd) {
+		cmd.Spec = "MAC_ADDRESS (-U [-P])"
+		macAddress := cmd.StringArg("MAC_ADDRESS", "",
+			"The MAC address of the device to ssh to.")
+		ssh_user := cmd.String(cli.StringOpt{
+			Name: "U sshuser",
+			Desc: "Connects via SSH using the -U SSH_USERNAME supplied.",
+			EnvVar:    "UNIFIED_SSH_USERNAME",
+			SetByUser: &ssh_userOption,
+		})
+		/*
+		cmd.String(cli.StringOpt{
+			Name: "P sshpass",
+			Desc: "Connects via SSH using the -P SSH_PASSWORD supplied.",
+			EnvVar:    "UNIFIED_SSH_PASSWORD",
+			SetByUser: &sshpass,
+		})
+		*/
+		ssh_port := cmd.Int(cli.IntOpt{
+			Name: "P ssh_port",
+			Desc: "Connects via SSH using the supplied port or defaults to 22.",
+			Value: 22,
+			EnvVar:    "UNIFIED_SSH_PORT",
+			SetByUser: &ssh_portOption,
+		})
+		cmd.Action = func() {
+			ip_address, err := cx.Devices.GetIPFromMac(ctx, *macAddress)
+			if err != nil {
+
+			}
+			_, session, err :=
+				unified.ConnectToSSHHost(*ssh_user, ip_address+":"+strconv.Itoa(*ssh_port))
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("Established SSH Connection as " + *ssh_user)
+			out, err := session.CombinedOutput(os.Args[3])
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(string(out))
+		}
 	})
 
 	app.Run(os.Args)
