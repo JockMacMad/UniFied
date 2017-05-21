@@ -15,10 +15,12 @@ import (
 	"strconv"
 	"time"
 	"github.com/jawher/mow.cli"
+	"bytes"
 )
 
 var (
 	ctx = context.TODO()
+	cx *unified.UniFiClient
 )
 
 type SSHConnection struct {
@@ -40,36 +42,13 @@ var daemon bool
 func main() {
 	app := cli.App("unified", "Unified CLI for Ubiquiti UniFi")
 	app.Version("v version", "unified 0.0.1")
-	//app.Spec = "-u -p [COMMAND [ARG...]]"
-
-	// Only log the warning severity or above.
-	log.SetLevel(log.WarnLevel)
-
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Timeout: time.Second * 300, Transport: tr}
-	_, err := client.Get("https://golang.org/")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	d := &unified.UnifiedDBOptions{
-		DbUsageEnabled: true,
-		UseInMemoryDB:  true,
-	}
-
-	o := &unified.UnifiedOptions{
-		DbUsage: d,
-	}
-
-	cx := unified.NewUniFiClient(client, o)
+	app.Spec = "-u -p -c ([-b -c -s])"
 
 	var (
-		/*
+
 		useDB = app.Bool(
 			cli.BoolOpt{
-				Name:      "db useDB",
+				Name:      "b useDB",
 				Value:     true,
 				Desc:      "Enable the use of a DB for storing data from the UniFi Controller.",
 				EnvVar:    "UNIFIED_USEDB",
@@ -86,7 +65,7 @@ func main() {
 				SetByUser: &useDBOption,
 			},
 		)
-
+/*
 		daemon = app.Bool(
 			cli.BoolOpt{
 				Name:      "d daemon",
@@ -108,17 +87,74 @@ func main() {
 			},
 		)
 
-		pass = app.String(cli.StringOpt{
-			Name:      "p password",
-			Desc:      "Runs Unified as a daemon.",
-			EnvVar:    "UNIFIED_PASSWORD",
-			SetByUser: &password,
-		},
+		pass = app.String(
+				cli.StringOpt{
+				Name:      "p password",
+				Desc:      "Runs Unified as a daemon.",
+				EnvVar:    "UNIFIED_PASSWORD",
+				SetByUser: &password,
+			},
+		)
+
+		controller = app.String(
+			cli.StringOpt{
+				Name:      "c controller",
+				Desc:      "Set the UniFi Controller address.",
+				EnvVar:    "UNIFIED_CONTROLLER",
+			},
+		)
+
+		site = app.String(
+			cli.StringOpt{
+				Name:      "s site",
+				Value:     "default",
+				Desc:      "Set the UniFi Controller Site to use.",
+				EnvVar:    "UNIFIED_SITE",
+			},
 		)
 	)
 
 	app.Before = func() {
-		cx.Authentication.Login(ctx, *user, *pass)
+		// Only log the warning severity or above.
+		log.SetLevel(log.WarnLevel)
+
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Timeout: time.Second * 300, Transport: tr}
+
+		d := &unified.UnifiedDBOptions{
+			DbUsageEnabled: *useDB,
+			UseInMemoryDB:  *useCache,
+		}
+
+		o := &unified.UnifiedOptions{
+			DbUsage: d,
+		}
+
+		if *controller != "" {
+			var buffer bytes.Buffer
+			buffer.WriteString("https://")
+			buffer.WriteString(*controller)
+			buffer.WriteString( "/api/s/")
+			cont_addr := buffer.String()
+			base_url, err := url.Parse(cont_addr)
+
+			if err != nil {
+				panic(err)
+			}
+
+			cx = unified.NewUniFiClient(client, o)
+			cx.BaseURL = base_url
+
+			cx.UserName = user
+			cx.Password = pass
+			cx.SiteName = site
+			cx.Authentication.Login(ctx, *user, *pass)
+		} else {
+			fmt.Println("No UniFi Controller specified!")
+			cli.Exit(999)
+		}
 	}
 
 
@@ -163,7 +199,7 @@ func main() {
 			})
 	})
 
-	app.Command("devices", "All devices command.", func(cmd *cli.Cmd) {
+	app.Command("devices", "UniFi devices command & sub-commands.", func(cmd *cli.Cmd) {
 		cmd.Command(
 			"ls",
 			"Displays a list of known UniFi devices (of all types).",
@@ -1095,15 +1131,4 @@ func outputDevicesToTable(devices []unified.DeviceShort) {
 	}
 	table.Render()
 	// Send output
-}
-
-	func setup() {
-	client := unified.NewUniFiClient(nil, nil)
-	value, err := url.Parse("https://192.168.10.7:8443/api/s/")
-
-	if err != nil {
-		//log.Fatal(err)
-	} else {
-		client.BaseURL = value
-	}
 }

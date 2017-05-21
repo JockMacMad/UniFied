@@ -7,9 +7,11 @@ import (
 	"github.com/HouzuoGuo/tiedot/db"
 	log "github.com/Sirupsen/logrus"
 	"github.com/fatih/structs"
+	"bytes"
 )
 
-const devicesBasePath = "/api/s/default/stat/device"
+//const devicesBasePath = "/api/s/default/stat/device"
+const devicesBasePath = "/stat/device"
 
 // DeviceService is an interface for interfacing with the Device
 // endpoints of the UniFi API
@@ -191,7 +193,8 @@ type SysStats struct {
 
 // List all devices
 func (s *DevicesServiceOp) List(ctx context.Context, opt *ListOptions) ([]Device, *Response, error) {
-	path := devicesBasePath
+	//path := devicesBasePath
+	path := *buildURL(s)
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -223,7 +226,8 @@ func (s *DevicesServiceOp) List(ctx context.Context, opt *ListOptions) ([]Device
 
 // List all devices
 func (s *DevicesServiceOp) ListShort(ctx context.Context, filter string, opt *ListOptions) ([]DeviceShort, *Response, error) {
-	path := devicesBasePath
+	//path := devicesBasePath
+	path := *buildURL(s)
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -258,6 +262,14 @@ func (s *DevicesServiceOp) ListShort(ctx context.Context, filter string, opt *Li
 
 	//log.Debug(root.Devices)
 	return deviceShortArray, resp, err
+}
+func buildURL(s *DevicesServiceOp) *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(s.client.BaseURL.String())
+	buffer.WriteString(*s.client.SiteName)
+	buffer.WriteString(devicesBasePath)
+	path := buffer.String()
+	return &path
 }
 func DevicesDB(s *DevicesServiceOp, root *devicesRoot) *devicesRoot {
 	devicesColExists := false

@@ -63,17 +63,17 @@ type UniFiClient struct {
 	Options *UnifiedOptions
 
 	// The user using Unified
-	UserName string
+	UserName *string
 
 	// The password for the user using Unified
-	Password string
+	Password *string
 
 	UnifiCookie *http.Cookie
 	CSRFCookie  *http.Cookie
 
 	// TODO: Implement Site properly
 	// Specified site to operate on
-	SiteName string
+	SiteName *string
 
 	// Base URL for API requests.
 	BaseURL *url.URL
