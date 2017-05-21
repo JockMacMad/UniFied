@@ -1,7 +1,7 @@
 package main
 
 import (
-	unified "bitbucket.org/ecosse-hosting/unified/lib"
+	unified "bitbucket.org/ecosse-hosting/unified/lib/unifi"
 	"bytes"
 	"context"
 	"crypto/tls"

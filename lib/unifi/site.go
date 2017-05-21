@@ -1,4 +1,4 @@
-package lib
+package unifi
 
 import (
 	"context"
@@ -29,7 +29,6 @@ var _ SitesService = &SitesServiceOp{}
 
 type sitesRoot struct {
 	Sites []Site `json:"sites"`
-	Links *Links `json:"links"`
 }
 
 type siteRoot struct {
