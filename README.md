@@ -11,30 +11,30 @@ The Commands and Sub-Commands are as follows: -
 unified 
          help 
          controller
-                 help
+                 --help
                  alarms
                          ls       
                  event
                          ls
          devices
-                help
+                --help
                 ls
-                inspect
+                inspect MAC_ADDRESS
                 ugw
                         help
                         ls
                         ps
-                        inspect     
+                        inspect MAC_ADDRESS    
                 uap
                         help
                         ls
                         ps
-                        inspect
+                        inspect MAC_ADDRESS
                 usw
                         help
                         ls
                         ps
-                        inspect
+                        inspect MAC_ADDRESS
                         cn
                         pt
                         po
@@ -45,13 +45,14 @@ unified
                         stats
                         ssh  
          exec
+                --help
          guest
          operator
-                help
+                --help
                 ls
                 inspect
          site
-                help
+                --help
                 ls
                 ps
                 inspect
