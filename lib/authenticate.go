@@ -3,6 +3,7 @@ package lib
 import (
 	"context"
 	"fmt"
+	"os"
 )
 
 const loginBasePath = "/api/login"
@@ -52,6 +53,9 @@ func (s *AuthenticateServiceOp) Login(ctx context.Context, username string, pass
 	responseRoot := new(authenticationRoot)
 	resp, err := s.client.Do(req, responseRoot)
 	if err != nil {
+
+		fmt.Println("unified - Controller - Authentication failure !")
+		os.Exit(-999)
 		return nil, resp, err
 	}
 

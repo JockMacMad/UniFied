@@ -7,15 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"github.com/fatih/color"
 	"github.com/fatih/structs"
 	"github.com/olekukonko/tablewriter"
-	"github.com/urfave/cli"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
+	"github.com/jawher/mow.cli"
 )
 
 var (
@@ -33,9 +32,15 @@ var ssh_host string
 var ssh_user string
 var table_output bool
 var json_output bool
+var username bool
+var password bool
+var useDBOption bool
+var daemon bool
 
 func main() {
-	app := cli.NewApp()
+	app := cli.App("unified", "Unified CLI for Ubiquiti UniFi")
+	app.Version("v version", "unified 0.0.1")
+	//app.Spec = "-u -p [COMMAND [ARG...]]"
 
 	// Only log the warning severity or above.
 	log.SetLevel(log.WarnLevel)
@@ -60,125 +65,141 @@ func main() {
 
 	cx := unified.NewUniFiClient(client, o)
 
-	cx.Authentication.Login(ctx, "donstewa", "Blackadder!782")
+	var (
+		/*
+		useDB = app.Bool(
+			cli.BoolOpt{
+				Name:      "db useDB",
+				Value:     true,
+				Desc:      "Enable the use of a DB for storing data from the UniFi Controller.",
+				EnvVar:    "UNIFIED_USEDB",
+				SetByUser: &useDBOption,
+			},
+		)
 
-	app.Name = "Unified"
-	app.Version = "0.0.1"
-	app.Compiled = time.Now()
-	app.Authors = []cli.Author{
-		cli.Author{
-			Name:  "Don Stewart",
-			Email: "don.stewart at icloud.com",
+		useCache = app.Bool(
+			cli.BoolOpt{
+				Name:      "c useCache",
+				Value:     true,
+				Desc:      "Enable the use of the internal DB for retreiving data. Implies -db.",
+				EnvVar:    "UNIFIED_USE_CACHE",
+				SetByUser: &useDBOption,
+			},
+		)
+
+		daemon = app.Bool(
+			cli.BoolOpt{
+				Name:      "d daemon",
+				Value:     false,
+				Desc:      "Runs Unified as a daemon.",
+				EnvVar:    "UNIFIED_DAEMON",
+				SetByUser: &daemon,
+			},
+		)
+		*/
+
+		user = app.String(
+			cli.StringOpt{
+				Name:      "u username",
+				Value:     "",
+				Desc:      "Runs Unified as a daemon.",
+				EnvVar:    "UNIFIED_USER",
+				SetByUser: &username,
+			},
+		)
+
+		pass = app.String(cli.StringOpt{
+			Name:      "p password",
+			Desc:      "Runs Unified as a daemon.",
+			EnvVar:    "UNIFIED_PASSWORD",
+			SetByUser: &password,
 		},
+		)
+	)
+
+	app.Before = func() {
+		cx.Authentication.Login(ctx, *user, *pass)
 	}
-	app.Copyright = "(c) 2017 Ecosse Hosting"
-	app.HelpName = "Unified - Ubiquiti UniFi Tools"
-	app.Usage = "unified help"
-	app.UsageText = "Unified - demonstrating the available API"
 
 
-	app.Flags = []cli.Flag{
-		cli.BoolTFlag{
-			Name:  "UseDB, db, b",
-			Usage: "Enable the use of a DB for storing data from the UniFi Controller.",
-		},
-		cli.BoolTFlag{
-			Name:  "UseCache, c",
-			Usage: "Enable the use of the internal DB for retreiving data. Implies -db",
-		},
-		cli.BoolTFlag{
-			Name:  "Daemon, d",
-			Usage: "Runs Unified as a daemon.",
-		},
-	}
+	app.Command("db", "Manages the Unified DB if enabled.", func(cmd *cli.Cmd) {
+		cmd.Command(
+			"clean",
+			"Drops the selected stored data returning the DB to an empty state.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"all",
+					"Drops all the currently stored data returning the DB to an empty state.",
+					func(*cli.Cmd) {
+						cmd2.Action = func() {
+							fmt.Println("new task template: ")
+						}
+					})
+				cmd2.Command(
+					"alarms",
+					"Drops all the currently stored alarm data only.",
+					func(*cli.Cmd) {
+						cmd2.Action = func() {
+							fmt.Println("new task template: ")
+						}
+					})
+				cmd2.Command(
+					"events",
+					"Drops all the currently stored event data only.",
+					func(*cli.Cmd) {
+						cmd2.Action = func() {
+							fmt.Println("new task template: ")
+						}
+					})
+				cmd2.Command(
+					"users",
+					"Drops all the currently stored user data only.",
+					func(*cli.Cmd) {
+						cmd2.Action = func() {
+							fmt.Println("new task template: ")
+						}
+					})
 
-	app.Commands = []cli.Command{
-		cli.Command{
-			Name:        "db",
-			Aliases:     []string{"database"},
-			Category:    "Database",
-			Usage:       "do the doo",
-			UsageText:   "doo - does the dooing",
-			Description: "Manages the Unified DB if enabled.",
-			ArgsUsage:   "[arrgh]",
-			Flags: []cli.Flag{
-				cli.BoolTFlag{Name: "db, UseDB"},
-			},
-			Subcommands: cli.Commands{
-				cli.Command{
-					Name:  "clean",
-					Usage: "Drops the selected stored data returning the DB to an empty state.",
-					Action: func(c *cli.Context) error {
-						fmt.Println("new task template: ", c.Args().First())
-						return nil
-					},
-					Subcommands: cli.Commands{
-						cli.Command{
-							Name:  "all",
-							Usage: "Drops all the currently stored data returning the DB to an empty state.",
-							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
-								return nil
-							},
-						},
-						cli.Command{
-							Name:  "alarms",
-							Usage: "Drops all the currently stored alarm data only.",
-							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
-								return nil
-							},
-						},
-						cli.Command{
-							Name:  "events",
-							Usage: "Drops all the currently stored event data only.",
-							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
-								return nil
-							},
-						},
-						cli.Command{
-							Name:  "users",
-							Usage: "Drops all the currently stored user data only.",
-							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
-								return nil
-							},
-						},
-					},
-				},
-			},
-			SkipFlagParsing: false,
-			HideHelp:        false,
-			Hidden:          false,
-			HelpName:        "database",
-			BashComplete: func(c *cli.Context) {
-				fmt.Fprintf(c.App.Writer, "--better\n")
-			},
-			Before: func(c *cli.Context) error {
-				fmt.Fprintf(c.App.Writer, "brace for impact\n")
-				return nil
-			},
-			After: func(c *cli.Context) error {
-				fmt.Fprintf(c.App.Writer, "did we lose anyone?\n")
-				return nil
-			},
-			Action: func(c *cli.Context) error {
-				c.Command.FullName()
-				c.Command.HasName("wop")
-				c.Command.Names()
-				c.Command.VisibleFlags()
-				fmt.Fprintf(c.App.Writer, "dodododododoodododddooooododododooo\n")
-				if c.Bool("forever") {
-					c.Command.Run(c)
+			})
+	})
+
+	app.Command("devices", "All devices command.", func(cmd *cli.Cmd) {
+		cmd.Command(
+			"ls",
+			"Displays a list of known UniFi devices (of all types).",
+			func(cmd2 *cli.Cmd) {
+				tableo := cmd2.Bool(cli.BoolOpt{
+					Name:      "t table",
+					Value: 	   true,
+					Desc:      "Displays device short data in a table on the console.",
+					SetByUser: &table_output,
+				})
+				jsono := cmd2.Bool(cli.BoolOpt{
+					Name:      "j json",
+					Desc:      "Displays device short data in JSON on the console.",
+					SetByUser: &json_output,
+				})
+				cmd2.Action = func() {
+					fmt.Println("\nunified devices ls\n")
+					devices, _, err := cx.Devices.ListShort(ctx, "all", nil)
+					if err != nil {
+
+					}
+					if *jsono {
+						devices = DeviceArrayToJSON(devices)
+					}
+					if *tableo {
+						outputDevicesToTable(devices)
+					}
+
 				}
-				return nil
-			},
-			OnUsageError: func(c *cli.Context, err error, isSubcommand bool) error {
-				fmt.Fprintf(c.App.Writer, "for shame\n")
-				return err
-			},
-		},
+			})
+	})
+
+	app.Run(os.Args)
+}
+
+/*
 		cli.Command{
 			Name:     "devices",
 			Category: "Devices",
@@ -852,11 +873,13 @@ func main() {
 
 	app.Run(os.Args)
 }
+
 func DeviceToJSON(device *unified.Device) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "    ")
 	enc.Encode(device)
 }
+*/
 func DeviceArrayToJSON(devices []unified.DeviceShort) []unified.DeviceShort {
 	table_output = false
 	enc := json.NewEncoder(os.Stdout)
@@ -864,6 +887,7 @@ func DeviceArrayToJSON(devices []unified.DeviceShort) []unified.DeviceShort {
 	enc.Encode(devices)
 	return devices
 }
+
 func outputDevicesToTable(devices []unified.DeviceShort) {
 	table := tablewriter.NewWriter(os.Stdout)
 	for _, v := range devices {
@@ -888,12 +912,7 @@ func outputDevicesToTable(devices []unified.DeviceShort) {
 	// Send output
 }
 
-func wopAction(c *cli.Context) error {
-	fmt.Fprintf(c.App.Writer, ":wave: over here, eh\n")
-	return nil
-}
-
-func setup() {
+	func setup() {
 	client := unified.NewUniFiClient(nil, nil)
 	value, err := url.Parse("https://192.168.10.7:8443/api/s/")
 
