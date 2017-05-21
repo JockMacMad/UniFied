@@ -1,13 +1,14 @@
 package lib
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/HouzuoGuo/tiedot/db"
 	log "github.com/Sirupsen/logrus"
 	"github.com/fatih/structs"
-	"bytes"
+	"strconv"
 )
 
 //const devicesBasePath = "/api/s/default/stat/device"
@@ -194,7 +195,7 @@ type SysStats struct {
 // List all devices
 func (s *DevicesServiceOp) List(ctx context.Context, opt *ListOptions) ([]Device, *Response, error) {
 	//path := devicesBasePath
-	path := *buildURL(s)
+	path := *s.buildURL()
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -227,7 +228,7 @@ func (s *DevicesServiceOp) List(ctx context.Context, opt *ListOptions) ([]Device
 // List all devices
 func (s *DevicesServiceOp) ListShort(ctx context.Context, filter string, opt *ListOptions) ([]DeviceShort, *Response, error) {
 	//path := devicesBasePath
-	path := *buildURL(s)
+	path := *s.buildURL()
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -263,14 +264,7 @@ func (s *DevicesServiceOp) ListShort(ctx context.Context, filter string, opt *Li
 	//log.Debug(root.Devices)
 	return deviceShortArray, resp, err
 }
-func buildURL(s *DevicesServiceOp) *string {
-	var buffer bytes.Buffer
-	buffer.WriteString(s.client.BaseURL.String())
-	buffer.WriteString(*s.client.SiteName)
-	buffer.WriteString(devicesBasePath)
-	path := buffer.String()
-	return &path
-}
+
 func DevicesDB(s *DevicesServiceOp, root *devicesRoot) *devicesRoot {
 	devicesColExists := false
 	var devicesDB *db.Col = nil
@@ -364,7 +358,7 @@ func (s *DevicesServiceOp) Get(ctx context.Context, id int) (*Device, *Response,
 
 	}
 
-	path := fmt.Sprintf("%s/%d", devicesBasePath, id)
+	path := *s.buildURLWithId(id)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -386,7 +380,7 @@ func (s *DevicesServiceOp) GetByMac(ctx context.Context, mac string) (*Device, *
 
 	}
 
-	path := fmt.Sprintf("%s/%s", devicesBasePath, mac)
+	path := fmt.Sprintf("%s/%s", s.buildURL(), mac)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -438,6 +432,20 @@ func (s *DevicesServiceOp) GetIPFromMac(ctx context.Context, mac string) (string
 	return device.IP, nil
 }
 
-//func GetDeviceFromMac(mac string, short bool) Device {
+func (s *DevicesServiceOp) buildURL() *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(s.client.BaseURL.String())
+	buffer.WriteString(*s.client.SiteName)
+	buffer.WriteString(devicesBasePath)
+	path := buffer.String()
+	return &path
+}
 
-//}
+func (s *DevicesServiceOp) buildURLWithId(id int) *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(*s.buildURL())
+	buffer.WriteString("/")
+	buffer.WriteString(strconv.Itoa(id))
+	path := buffer.String()
+	return &path
+}

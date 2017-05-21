@@ -1,15 +1,18 @@
 package lib
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/HouzuoGuo/tiedot/db"
 	log "github.com/Sirupsen/logrus"
 	"github.com/fatih/structs"
+	"strconv"
 )
 
-const alarmsBasePath = "/api/s/default/list/alarm"
+//const alarmsBasePath = "/api/s/default/list/alarm"
+const alarmsBasePath = "/list/alarm"
 
 // AlarmsService is an interface for interfacing with the Alarm
 // endpoints of the UniFi API
@@ -59,7 +62,8 @@ type Alarm struct {
 
 // List all alarms
 func (s *AlarmsServiceOp) List(ctx context.Context, opt *ListOptions) ([]Alarm, *Response, error) {
-	path := alarmsBasePath
+	//path := alarmsBasePath
+	path := *s.buildURL()
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -181,7 +185,8 @@ func (s *AlarmsServiceOp) Get(ctx context.Context, id int) (*Alarm, *Response, e
 
 	}
 
-	path := fmt.Sprintf("%s/%d", alarmsBasePath, id)
+	//path := fmt.Sprintf("%s/%d", alarmsBasePath, id)
+	path := *s.buildURLWithId(id)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -215,4 +220,22 @@ func (r Alarm) Keys() []string {
 func (r Alarm) Values() []string {
 	var values []string
 	return values
+}
+
+func (s *AlarmsServiceOp) buildURL() *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(s.client.BaseURL.String())
+	buffer.WriteString(*s.client.SiteName)
+	buffer.WriteString(alarmsBasePath)
+	path := buffer.String()
+	return &path
+}
+
+func (s *AlarmsServiceOp) buildURLWithId(id int) *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(*s.buildURL())
+	buffer.WriteString("/")
+	buffer.WriteString(strconv.Itoa(id))
+	path := buffer.String()
+	return &path
 }

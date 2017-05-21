@@ -2,25 +2,26 @@ package main
 
 import (
 	unified "bitbucket.org/ecosse-hosting/unified/lib"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/fatih/structs"
+	"github.com/jawher/mow.cli"
 	"github.com/olekukonko/tablewriter"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
-	"github.com/jawher/mow.cli"
-	"bytes"
+	yaml2 "github.com/ghodss/yaml"
 )
 
 var (
 	ctx = context.TODO()
-	cx *unified.UniFiClient
+	cx  *unified.UniFiClient
 )
 
 type SSHConnection struct {
@@ -34,6 +35,7 @@ var ssh_hostOption bool
 var ssh_userOption bool
 var table_output bool
 var json_output bool
+var yaml_output bool
 var username bool
 var password bool
 var useDBOption bool
@@ -42,10 +44,9 @@ var daemon bool
 func main() {
 	app := cli.App("unified", "Unified CLI for Ubiquiti UniFi")
 	app.Version("v version", "unified 0.0.1")
-	app.Spec = "-u -p -c ([-b -c -s])"
+	app.Spec = "-u -p -c ([-b -c]) [-s]"
 
 	var (
-
 		useDB = app.Bool(
 			cli.BoolOpt{
 				Name:      "b useDB",
@@ -65,16 +66,16 @@ func main() {
 				SetByUser: &useDBOption,
 			},
 		)
-/*
-		daemon = app.Bool(
-			cli.BoolOpt{
-				Name:      "d daemon",
-				Value:     false,
-				Desc:      "Runs Unified as a daemon.",
-				EnvVar:    "UNIFIED_DAEMON",
-				SetByUser: &daemon,
-			},
-		)
+		/*
+			daemon = app.Bool(
+				cli.BoolOpt{
+					Name:      "d daemon",
+					Value:     false,
+					Desc:      "Runs Unified as a daemon.",
+					EnvVar:    "UNIFIED_DAEMON",
+					SetByUser: &daemon,
+				},
+			)
 		*/
 
 		user = app.String(
@@ -88,7 +89,7 @@ func main() {
 		)
 
 		pass = app.String(
-				cli.StringOpt{
+			cli.StringOpt{
 				Name:      "p password",
 				Desc:      "Runs Unified as a daemon.",
 				EnvVar:    "UNIFIED_PASSWORD",
@@ -98,18 +99,18 @@ func main() {
 
 		controller = app.String(
 			cli.StringOpt{
-				Name:      "c controller",
-				Desc:      "Set the UniFi Controller address.",
-				EnvVar:    "UNIFIED_CONTROLLER",
+				Name:   "c controller",
+				Desc:   "Set the UniFi Controller address.",
+				EnvVar: "UNIFIED_CONTROLLER",
 			},
 		)
 
 		site = app.String(
 			cli.StringOpt{
-				Name:      "s site",
-				Value:     "default",
-				Desc:      "Set the UniFi Controller Site to use.",
-				EnvVar:    "UNIFIED_SITE",
+				Name:   "s site",
+				Value:  "default",
+				Desc:   "Set the UniFi Controller Site to use.",
+				EnvVar: "UNIFIED_SITE",
 			},
 		)
 	)
@@ -136,7 +137,7 @@ func main() {
 			var buffer bytes.Buffer
 			buffer.WriteString("https://")
 			buffer.WriteString(*controller)
-			buffer.WriteString( "/api/s/")
+			buffer.WriteString("/api/s/")
 			cont_addr := buffer.String()
 			base_url, err := url.Parse(cont_addr)
 
@@ -157,6 +158,84 @@ func main() {
 		}
 	}
 
+	app.Command("controller", "Manages the Unified Controller.", func(cmd *cli.Cmd) {
+		cmd.Command(
+			"alarms",
+			"Displays a list of alarms from the Controller.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of alarms from the Controller.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Action = func() {
+							fmt.Println("\nunified controller alarms ls\n")
+							alarms, _, err := cx.Alarms.List(ctx, nil)
+							if err != nil {
+
+							}
+							for _, v := range alarms {
+								table := tablewriter.NewWriter(os.Stdout)
+								fieldNames := structs.Names(&v)
+								table.SetHeader(fieldNames)
+
+								fieldValues := structs.Values(&v)
+								valuesArray := make([]string, len(fieldValues))
+								for k, w := range fieldValues {
+									switch x := w.(type) {
+									case string:
+										valuesArray[k] = x
+									case bool:
+										valuesArray[k] = strconv.FormatBool(x)
+									case int:
+										valuesArray[k] = strconv.Itoa(x)
+									}
+								}
+								table.Append(valuesArray)
+								table.Render() // Send output
+							}
+
+						}
+					})
+			})
+		cmd.Command(
+			"events",
+			"Displays a list of events from the Controller.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of events from the Controller.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Action = func() {
+							fmt.Println("\nunified controller events ls\n")
+							alarms, _, err := cx.Events.List(ctx, nil)
+							if err != nil {
+
+							}
+							for _, v := range alarms {
+								table := tablewriter.NewWriter(os.Stdout)
+								fieldNames := structs.Names(&v)
+								table.SetHeader(fieldNames)
+
+								fieldValues := structs.Values(&v)
+								valuesArray := make([]string, len(fieldValues))
+								for k, w := range fieldValues {
+									switch x := w.(type) {
+									case string:
+										valuesArray[k] = x
+									case bool:
+										valuesArray[k] = strconv.FormatBool(x)
+									case int:
+										valuesArray[k] = strconv.Itoa(x)
+									}
+								}
+								table.Append(valuesArray)
+								table.Render() // Send output
+							}
+
+						}
+					})
+			})
+	})
 
 	app.Command("db", "Manages the Unified DB if enabled.", func(cmd *cli.Cmd) {
 		cmd.Command(
@@ -204,10 +283,10 @@ func main() {
 			"ls",
 			"Displays a list of known UniFi devices (of all types).",
 			func(cmd2 *cli.Cmd) {
-				cmd2.Spec = "[-t | -j]"
+				cmd2.Spec = "-tjy"
 				tableo := cmd2.Bool(cli.BoolOpt{
 					Name:      "t table",
-					Value: 	   true,
+					Value:     true,
 					Desc:      "Displays device short data in a table on the console.",
 					SetByUser: &table_output,
 				})
@@ -216,20 +295,27 @@ func main() {
 					Desc:      "Displays device short data in JSON on the console.",
 					SetByUser: &json_output,
 				})
+				yamlo := cmd2.Bool(cli.BoolOpt{
+					Name:      "y yaml",
+					Desc:      "Displays device short data in YAML on the console.",
+					SetByUser: &yaml_output,
+				})
 				cmd2.Action = func() {
 					fmt.Println("\nunified devices ls\n")
 					devices, _, err := cx.Devices.ListShort(ctx, "all", nil)
 					if err != nil {
-
 					}
-					if *jsono {
-						devices = DeviceArrayToJSON(devices)
+					if *yamlo {
+						devices = DeviceArrayToYAML(devices)
 					} else {
-						if *tableo {
-							outputDevicesToTable(devices)
+						if *jsono {
+							devices = DeviceArrayToJSON(devices)
+						} else {
+							if *tableo {
+								outputDevicesToTable(devices)
+							}
 						}
 					}
-
 				}
 			})
 		cmd.Command(
@@ -254,10 +340,10 @@ func main() {
 					"ls",
 					"Displays a list of known UniFi USGs.",
 					func(cmd3 *cli.Cmd) {
-						cmd3.Spec = "[-t | -j]"
+						cmd3.Spec = "-tjy"
 						tableo := cmd3.Bool(cli.BoolOpt{
 							Name:      "t table",
-							Value: 	   true,
+							Value:     true,
 							Desc:      "Displays device short data in a table on the console.",
 							SetByUser: &table_output,
 						})
@@ -266,20 +352,27 @@ func main() {
 							Desc:      "Displays device short data in JSON on the console.",
 							SetByUser: &json_output,
 						})
+						yamlo := cmd2.Bool(cli.BoolOpt{
+							Name:      "y yaml",
+							Desc:      "Displays device short data in YAML on the console.",
+							SetByUser: &yaml_output,
+						})
 						cmd3.Action = func() {
 							fmt.Println("\nunified devices ugw ls\n")
 							devices, _, err := cx.Devices.ListShort(ctx, "ugw", nil)
 							if err != nil {
-
 							}
-							if *jsono {
-								devices = DeviceArrayToJSON(devices)
+							if *yamlo {
+								devices = DeviceArrayToYAML(devices)
 							} else {
-								if *tableo {
-									outputDevicesToTable(devices)
+								if *jsono {
+									devices = DeviceArrayToJSON(devices)
+								} else {
+									if *tableo {
+										outputDevicesToTable(devices)
+									}
 								}
 							}
-
 						}
 					})
 				cmd2.Command(
@@ -306,10 +399,10 @@ func main() {
 					"ls",
 					"Displays a list of known UniFi UAPs.",
 					func(cmd3 *cli.Cmd) {
-						cmd3.Spec = "[-t | -j]"
+						cmd3.Spec = "-tjy"
 						tableo := cmd3.Bool(cli.BoolOpt{
 							Name:      "t table",
-							Value: 	   true,
+							Value:     true,
 							Desc:      "Displays device short data in a table on the console.",
 							SetByUser: &table_output,
 						})
@@ -318,20 +411,27 @@ func main() {
 							Desc:      "Displays device short data in JSON on the console.",
 							SetByUser: &json_output,
 						})
+						yamlo := cmd2.Bool(cli.BoolOpt{
+							Name:      "y yaml",
+							Desc:      "Displays device short data in YAML on the console.",
+							SetByUser: &yaml_output,
+						})
 						cmd3.Action = func() {
 							fmt.Println("\nunified devices uap ls\n")
 							devices, _, err := cx.Devices.ListShort(ctx, "uap", nil)
 							if err != nil {
-
 							}
-							if *jsono {
-								devices = DeviceArrayToJSON(devices)
+							if *yamlo {
+								devices = DeviceArrayToYAML(devices)
 							} else {
-								if *tableo {
-									outputDevicesToTable(devices)
+								if *jsono {
+									devices = DeviceArrayToJSON(devices)
+								} else {
+									if *tableo {
+										outputDevicesToTable(devices)
+									}
 								}
 							}
-
 						}
 					})
 				cmd2.Command(
@@ -358,10 +458,10 @@ func main() {
 					"ls",
 					"Displays a list of known UniFi USWs.",
 					func(cmd3 *cli.Cmd) {
-						cmd3.Spec = "[-t | -j]"
+						cmd3.Spec = "-tjy"
 						tableo := cmd3.Bool(cli.BoolOpt{
 							Name:      "t table",
-							Value: 	   true,
+							Value:     true,
 							Desc:      "Displays device short data in a table on the console.",
 							SetByUser: &table_output,
 						})
@@ -370,20 +470,27 @@ func main() {
 							Desc:      "Displays device short data in JSON on the console.",
 							SetByUser: &json_output,
 						})
+						yamlo := cmd3.Bool(cli.BoolOpt{
+							Name:      "y yaml",
+							Desc:      "Displays device short data in YAML on the console.",
+							SetByUser: &yaml_output,
+						})
 						cmd3.Action = func() {
 							fmt.Println("\nunified devices usw ls\n")
 							devices, _, err := cx.Devices.ListShort(ctx, "usw", nil)
 							if err != nil {
-
 							}
-							if *jsono {
-								devices = DeviceArrayToJSON(devices)
+							if *yamlo {
+								devices = DeviceArrayToYAML(devices)
 							} else {
-								if *tableo {
-									outputDevicesToTable(devices)
+								if *jsono {
+									devices = DeviceArrayToJSON(devices)
+								} else {
+									if *tableo {
+										outputDevicesToTable(devices)
+									}
 								}
 							}
-
 						}
 					})
 				cmd2.Command(
@@ -409,23 +516,23 @@ func main() {
 		macAddress := cmd.StringArg("MAC_ADDRESS", "",
 			"The MAC address of the device to ssh to.")
 		ssh_user := cmd.String(cli.StringOpt{
-			Name: "U sshuser",
-			Desc: "Connects via SSH using the -U SSH_USERNAME supplied.",
+			Name:      "U sshuser",
+			Desc:      "Connects via SSH using the -U SSH_USERNAME supplied.",
 			EnvVar:    "UNIFIED_SSH_USERNAME",
 			SetByUser: &ssh_userOption,
 		})
 		/*
-		cmd.String(cli.StringOpt{
-			Name: "P sshpass",
-			Desc: "Connects via SSH using the -P SSH_PASSWORD supplied.",
-			EnvVar:    "UNIFIED_SSH_PASSWORD",
-			SetByUser: &sshpass,
-		})
+			cmd.String(cli.StringOpt{
+				Name: "P sshpass",
+				Desc: "Connects via SSH using the -P SSH_PASSWORD supplied.",
+				EnvVar:    "UNIFIED_SSH_PASSWORD",
+				SetByUser: &sshpass,
+			})
 		*/
 		ssh_port := cmd.Int(cli.IntOpt{
-			Name: "P ssh_port",
-			Desc: "Connects via SSH using the supplied port or defaults to 22.",
-			Value: 22,
+			Name:      "P ssh_port",
+			Desc:      "Connects via SSH using the supplied port or defaults to 22.",
+			Value:     22,
 			EnvVar:    "UNIFIED_SSH_PORT",
 			SetByUser: &ssh_portOption,
 		})
@@ -1099,6 +1206,20 @@ func DeviceToJSON(device *unified.Device) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "    ")
 	enc.Encode(device)
+}
+
+func DeviceArrayToYAML(devices []unified.DeviceShort) []unified.DeviceShort {
+	table_output = false
+	yaml := new(bytes.Buffer)
+	enc := json.NewEncoder(yaml)
+	enc.SetIndent("", "    ")
+	enc.Encode(devices)
+	y, err := yaml2.JSONToYAML(yaml.Bytes())
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+	}
+	fmt.Println(string(y))
+	return devices
 }
 
 func DeviceArrayToJSON(devices []unified.DeviceShort) []unified.DeviceShort {
