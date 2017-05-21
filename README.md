@@ -9,7 +9,8 @@ The Commands and Sub-Commands are as follows: -
 
 ```
 unified 
-         help 
+         --help
+         --version
          controller
                  --help
                  alarms
@@ -21,17 +22,17 @@ unified
                 ls
                 inspect MAC_ADDRESS
                 ugw
-                        help
+                        --help
                         ls
                         ps
                         inspect MAC_ADDRESS    
                 uap
-                        help
+                        --help
                         ls
                         ps
                         inspect MAC_ADDRESS
                 usw
-                        help
+                        --help
                         ls
                         ps
                         inspect MAC_ADDRESS
