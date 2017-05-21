@@ -168,6 +168,7 @@ func main() {
 			"ls",
 			"Displays a list of known UniFi devices (of all types).",
 			func(cmd2 *cli.Cmd) {
+				cmd2.Spec = "[-t | -j]"
 				tableo := cmd2.Bool(cli.BoolOpt{
 					Name:      "t table",
 					Value: 	   true,
@@ -187,12 +188,183 @@ func main() {
 					}
 					if *jsono {
 						devices = DeviceArrayToJSON(devices)
-					}
-					if *tableo {
-						outputDevicesToTable(devices)
+					} else {
+						if *tableo {
+							outputDevicesToTable(devices)
+						}
 					}
 
 				}
+			})
+		cmd.Command(
+			"inspect",
+			"View detailed configuration of a running Unifi Device.",
+			func(cmd2 *cli.Cmd) {
+				macAddress := cmd2.StringArg("MAC_ADDRESS", "", "The MAC address of the device to inspect.")
+				cmd2.Action = func() {
+					fmt.Println("\nunified devices inspect\n")
+					device, _, err := cx.Devices.GetByMac(ctx, *macAddress)
+					if err != nil {
+
+					}
+					DeviceToJSON(device)
+				}
+			})
+		cmd.Command(
+			"ugw",
+			"Commands relating to a UniFi Security Gateway (UGW) aka USG.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of known UniFi USGs.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Spec = "[-t | -j]"
+						tableo := cmd3.Bool(cli.BoolOpt{
+							Name:      "t table",
+							Value: 	   true,
+							Desc:      "Displays device short data in a table on the console.",
+							SetByUser: &table_output,
+						})
+						jsono := cmd3.Bool(cli.BoolOpt{
+							Name:      "j json",
+							Desc:      "Displays device short data in JSON on the console.",
+							SetByUser: &json_output,
+						})
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices ugw ls\n")
+							devices, _, err := cx.Devices.ListShort(ctx, "ugw", nil)
+							if err != nil {
+
+							}
+							if *jsono {
+								devices = DeviceArrayToJSON(devices)
+							} else {
+								if *tableo {
+									outputDevicesToTable(devices)
+								}
+							}
+
+						}
+					})
+				cmd2.Command(
+					"inspect",
+					"View configuration of a running Unifi USG.",
+					func(cmd3 *cli.Cmd) {
+						macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+							"The MAC address of the device to inspect.")
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices ugw inspect MAC_ADDRESS\n")
+							device, _, err := cx.Devices.GetByMac(ctx, *macAddress)
+							if err != nil {
+
+							}
+							DeviceToJSON(device)
+						}
+					})
+			})
+		cmd.Command(
+			"uap",
+			"Commands relating to a UniFi Access Point (UAP).",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of known UniFi UAPs.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Spec = "[-t | -j]"
+						tableo := cmd3.Bool(cli.BoolOpt{
+							Name:      "t table",
+							Value: 	   true,
+							Desc:      "Displays device short data in a table on the console.",
+							SetByUser: &table_output,
+						})
+						jsono := cmd3.Bool(cli.BoolOpt{
+							Name:      "j json",
+							Desc:      "Displays device short data in JSON on the console.",
+							SetByUser: &json_output,
+						})
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices uap ls\n")
+							devices, _, err := cx.Devices.ListShort(ctx, "uap", nil)
+							if err != nil {
+
+							}
+							if *jsono {
+								devices = DeviceArrayToJSON(devices)
+							} else {
+								if *tableo {
+									outputDevicesToTable(devices)
+								}
+							}
+
+						}
+					})
+				cmd2.Command(
+					"inspect",
+					"View configuration of a running Unifi UAP.",
+					func(cmd3 *cli.Cmd) {
+						macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+							"The MAC address of the device to inspect.")
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices ugw inspect MAC_ADDRESS\n")
+							device, _, err := cx.Devices.GetByMac(ctx, *macAddress)
+							if err != nil {
+
+							}
+							DeviceToJSON(device)
+						}
+					})
+			})
+		cmd.Command(
+			"usw",
+			"Commands relating to a UniFi Switch (USW).",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of known UniFi USWs.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Spec = "[-t | -j]"
+						tableo := cmd3.Bool(cli.BoolOpt{
+							Name:      "t table",
+							Value: 	   true,
+							Desc:      "Displays device short data in a table on the console.",
+							SetByUser: &table_output,
+						})
+						jsono := cmd3.Bool(cli.BoolOpt{
+							Name:      "j json",
+							Desc:      "Displays device short data in JSON on the console.",
+							SetByUser: &json_output,
+						})
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices usw ls\n")
+							devices, _, err := cx.Devices.ListShort(ctx, "usw", nil)
+							if err != nil {
+
+							}
+							if *jsono {
+								devices = DeviceArrayToJSON(devices)
+							} else {
+								if *tableo {
+									outputDevicesToTable(devices)
+								}
+							}
+
+						}
+					})
+				cmd2.Command(
+					"inspect",
+					"View configuration of a running Unifi USW.",
+					func(cmd3 *cli.Cmd) {
+						macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+							"The MAC address of the device to inspect.")
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices usw inspect MAC_ADDRESS\n")
+							device, _, err := cx.Devices.GetByMac(ctx, *macAddress)
+							if err != nil {
+
+							}
+							DeviceToJSON(device)
+						}
+					})
 			})
 	})
 
@@ -209,37 +381,6 @@ func main() {
 				return nil
 			},
 			Subcommands: cli.Commands{
-				cli.Command{
-					Name:    "ls",
-					Aliases: []string{"list"},
-					Usage:   "Displays a list of known UniFi devices (of all types).",
-					Flags: []cli.Flag{
-						cli.BoolTFlag{
-							Name:        "table, T",
-							Usage:       "Displays device short data in a table on the console.",
-							Destination: &table_output,
-						},
-						cli.BoolFlag{
-							Name:        "json, J",
-							Usage:       "Displays device short data in JSON on the console.",
-							Destination: &json_output,
-						},
-					},
-					Action: func(c *cli.Context) error {
-						fmt.Println("\nunified devices ls\n")
-						devices, _, err := cx.Devices.ListShort(ctx, "all", nil)
-						if err != nil {
-							return nil
-						}
-						if json_output {
-							devices = DeviceArrayToJSON(devices)
-						}
-						if table_output {
-							outputDevicesToTable(devices)
-						}
-						return nil
-					},
-				},
 				cli.Command{
 					Name:      "inspect",
 					Aliases:   []string{"info"},
@@ -873,13 +1014,13 @@ func main() {
 
 	app.Run(os.Args)
 }
-
+*/
 func DeviceToJSON(device *unified.Device) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "    ")
 	enc.Encode(device)
 }
-*/
+
 func DeviceArrayToJSON(devices []unified.DeviceShort) []unified.DeviceShort {
 	table_output = false
 	enc := json.NewEncoder(os.Stdout)
