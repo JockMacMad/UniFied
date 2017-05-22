@@ -25,7 +25,7 @@ type DevicesService interface {
 	GetIPFromMac(ctx context.Context, mac string) (string, error)
 }
 
-// AlarmsServiceOp handles communication with the Alarm related methods of
+// DevicesServiceOp handles communication with the Device related methods of
 // the UniFi API.
 type DevicesServiceOp struct {
 	client *UniFiClient
@@ -36,7 +36,7 @@ type devicesRoot struct {
 }
 
 type deviceRoot struct {
-	Device []Device `json:"data"`
+	Device Device `json:"data"`
 }
 
 var _ DevicesService = &DevicesServiceOp{}

@@ -100,6 +100,7 @@ type UniFiClient struct {
 	Events         EventsService
 	Sites          SitesService
 	Users          UsersService
+	UAP		UAPService
 
 	// Optional function called after every successful request made to the DO APIs
 	onRequestCompleted RequestCompletionCallback
@@ -190,6 +191,7 @@ func NewUniFiClient(httpClient *http.Client, options *UnifiedOptions) *UniFiClie
 	c.Devices = &DevicesServiceOp{client: c}
 	c.Events = &EventsServiceOp{client: c}
 	c.Users = &UsersServiceOp{client: c}
+	c.UAP = &UAPServiceOp{client: c}
 
 	if c.Options.DbUsage.DbUsageEnabled {
 		unfiedDBLocation := "/tmp/UnifiedDB"
