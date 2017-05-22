@@ -2,6 +2,7 @@ package main
 
 import (
 	unified "bitbucket.org/ecosse-hosting/unified/lib/unifi"
+	shell "bitbucket.org/ecosse-hosting/unified/lib/shell"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"time"
 	yaml2 "github.com/ghodss/yaml"
+	"github.com/abiosoft/ishell"
 )
 
 var (
@@ -24,6 +26,8 @@ var (
 	cx  *unified.UniFiClient
 )
 
+// Simple structure representing the information needed to create a remote SSH Terminal session.
+// The exception is password which is input from stdin and not stored.
 type SSHConnection struct {
 	Username string
 	Host     string
@@ -306,7 +310,7 @@ func main() {
 					if err != nil {
 					}
 					if *yamlo {
-						devices = DeviceArrayToYAML(devices)
+						devices = OutputDeviceArrayToYAML(devices)
 					} else {
 						if *jsono {
 							devices = DeviceArrayToJSON(devices)
@@ -363,7 +367,7 @@ func main() {
 							if err != nil {
 							}
 							if *yamlo {
-								devices = DeviceArrayToYAML(devices)
+								devices = OutputDeviceArrayToYAML(devices)
 							} else {
 								if *jsono {
 									devices = DeviceArrayToJSON(devices)
@@ -422,7 +426,7 @@ func main() {
 							if err != nil {
 							}
 							if *yamlo {
-								devices = DeviceArrayToYAML(devices)
+								devices = OutputDeviceArrayToYAML(devices)
 							} else {
 								if *jsono {
 									devices = DeviceArrayToJSON(devices)
@@ -481,7 +485,7 @@ func main() {
 							if err != nil {
 							}
 							if *yamlo {
-								devices = DeviceArrayToYAML(devices)
+								devices = OutputDeviceArrayToYAML(devices)
 							} else {
 								if *jsono {
 									devices = DeviceArrayToJSON(devices)
@@ -552,6 +556,18 @@ func main() {
 				panic(err)
 			}
 			fmt.Println(string(out))
+		}
+	})
+
+	app.Command("shell", "Starts a Unified Interactive Shell", func(cmd *cli.Cmd) {
+		cmd.Action = func() {
+			shell := shell.NewUnifiedShell()
+			// Read and write history to $HOME/.ishell_history
+			shell.SetHomeHistoryPath(".unified_history")
+			shell.SetPrompt("unified --> ")
+			shell.ShowPrompt(true)
+			addShellCommands(shell)
+			shell.Start()
 		}
 	})
 
@@ -1208,8 +1224,14 @@ func DeviceToJSON(device *unified.Device) {
 	enc.Encode(device)
 }
 
-func DeviceArrayToYAML(devices []unified.DeviceShort) []unified.DeviceShort {
+func OutputDeviceArrayToYAML(devices []unified.DeviceShort) []unified.DeviceShort {
 	table_output = false
+	devices, y := deviceArrayToYAMLString(devices)
+	fmt.Println(string(y))
+	return devices
+}
+
+func deviceArrayToYAMLString(devices []unified.DeviceShort) ([]unified.DeviceShort, string) {
 	yaml := new(bytes.Buffer)
 	enc := json.NewEncoder(yaml)
 	enc.SetIndent("", "    ")
@@ -1218,8 +1240,7 @@ func DeviceArrayToYAML(devices []unified.DeviceShort) []unified.DeviceShort {
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
 	}
-	fmt.Println(string(y))
-	return devices
+	return devices, string(y)
 }
 
 func DeviceArrayToJSON(devices []unified.DeviceShort) []unified.DeviceShort {
@@ -1252,4 +1273,28 @@ func outputDevicesToTable(devices []unified.DeviceShort) {
 	}
 	table.Render()
 	// Send output
+}
+
+func addShellCommands(shell *ishell.Shell) {
+	// simulate an authentication
+	devicesCmd := &ishell.Cmd{
+		Name: "devices",
+		Help: "Unified devices command.",
+	}
+
+	devicesCmd.AddCmd(&ishell.Cmd{
+		Name: "ls",
+		Help: "List all devices of all types.",
+		Func: func(c *ishell.Context) {
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			devices, _, err := cx.Devices.ListShort(ctx, "all", nil)
+			c.ProgressBar().Stop()
+			if err != nil {
+			}
+			_, yamlOut := deviceArrayToYAMLString(devices)
+			c.ShowPaged(yamlOut)
+		},
+	})
+	shell.AddCmd(devicesCmd)
 }

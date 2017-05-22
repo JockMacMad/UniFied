@@ -34,11 +34,14 @@ const (
 	headerRateReset     = "RateLimit-Reset"
 )
 
+// Simple structure that captures the URL (string) and Port (int) that the DB is running on.
 type UnifiedDBHost struct {
 	dbUrl  string
 	dbPort int
 }
 
+// Simple structure used to hold information on the usage of a DB with Unified to store information retreived from
+// the Ubiquiti UniFi Controller.
 type UnifiedDBOptions struct {
 	// Actual pointer to the DB
 	UnifiedDB *db.DB
@@ -55,6 +58,8 @@ type UnifiedOptions struct {
 	DbUsage *UnifiedDBOptions
 }
 
+// The main UniFi Client structure. This holds pointers to the actual HTTP Client, Unifi Controller Username & Password,
+// Site etc. to use.
 type UniFiClient struct {
 	// HTTP client used to communicate with the DO API.
 	client *http.Client
@@ -71,7 +76,6 @@ type UniFiClient struct {
 	UnifiCookie *http.Cookie
 	CSRFCookie  *http.Cookie
 
-	// TODO: Implement Site properly
 	// Specified site to operate on
 	SiteName *string
 
