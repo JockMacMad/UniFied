@@ -19,6 +19,8 @@ import (
 	"time"
 	yaml2 "github.com/ghodss/yaml"
 	"github.com/abiosoft/ishell"
+	"github.com/fatih/color"
+	"strings"
 )
 
 var (
@@ -1276,12 +1278,16 @@ func outputDevicesToTable(devices []unified.DeviceShort) {
 }
 
 func addShellCommands(shell *ishell.Shell) {
-	// simulate an authentication
+
+	devicesCmd := addDevicesCommand()
+
+	shell.AddCmd(devicesCmd)
+}
+func addDevicesCommand() *ishell.Cmd {
 	devicesCmd := &ishell.Cmd{
 		Name: "devices",
-		Help: "Unified devices command.",
+		Help: "Unified devices commands.",
 	}
-
 	devicesCmd.AddCmd(&ishell.Cmd{
 		Name: "ls",
 		Help: "List all devices of all types.",
@@ -1296,5 +1302,105 @@ func addShellCommands(shell *ishell.Shell) {
 			c.ShowPaged(yamlOut)
 		},
 	})
-	shell.AddCmd(devicesCmd)
+
+	devicesCmd.AddCmd(addUGWCommands())
+	devicesCmd.AddCmd(addUSWCommands())
+	devicesCmd.AddCmd(addUAPCommands())
+
+	return devicesCmd
+}
+
+func addUGWCommands() *ishell.Cmd {
+	// simulate an authentication
+	ugwCmd := &ishell.Cmd{
+		Name: "ugw",
+		Help: "Unified Gateway (UGW/USG) commands.",
+	}
+	ugwLsCmd := devicesLsCmd(
+		"ls",
+		"List devices of type (UGW/USG). Non-Paged Output.",
+		"ugw",
+		false,
+	)
+	ugwLsMoreCmd := devicesLsCmd(
+		"more",
+		"List devices of type (UGW/USG). Paged Output.",
+		"ugw",
+		true,
+	)
+	ugwLsCmd.AddCmd(ugwLsMoreCmd)
+	ugwCmd.AddCmd(ugwLsCmd)
+	return ugwCmd
+}
+
+func addUSWCommands() *ishell.Cmd {
+	// simulate an authentication
+	uswCmd := &ishell.Cmd{
+		Name: "usw",
+		Help: "Unified Gateway (USW) commands.",
+	}
+	uswLsCmd := devicesLsCmd(
+		"ls",
+		"List devices of type (USW). Non-Paged Output.",
+		"usw",
+		false,
+	)
+	uswLsMoreCmd := devicesLsCmd(
+		"more",
+		"List devices of type (USW). Paged Output.",
+		"usw",
+		true,
+	)
+	uswLsCmd.AddCmd(uswLsMoreCmd)
+	uswCmd.AddCmd(uswLsCmd)
+	return uswCmd
+}
+
+func addUAPCommands() *ishell.Cmd {
+	// simulate an authentication
+	uapCmd := &ishell.Cmd{
+		Name: "uap",
+		Help: "Unified Gateway (UAP) commands.",
+	}
+	uapLsCmd := devicesLsCmd(
+		"ls",
+		"List devices of type (UAP). Non-Paged Output.",
+		"uap",
+		false,
+	)
+	uapLsMoreCmd := devicesLsCmd(
+		"more",
+		"List devices of type (UAP). Paged Output.",
+		"uap",
+		true,
+	)
+	uapLsCmd.AddCmd(uapLsMoreCmd)
+	uapCmd.AddCmd(uapLsCmd)
+	return uapCmd
+}
+
+func devicesLsCmd(name string, help string, device string, paged bool) *ishell.Cmd {
+	lsMoreCmd := &ishell.Cmd{
+		Name: name,
+		Help: help,
+		Func: func(c *ishell.Context) {
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			devices, _, err := cx.Devices.ListShort(ctx, device, nil)
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string {"Error retrieving ", device, "devices from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			_, yamlOut := deviceArrayToYAMLString(devices)
+			if paged {
+				c.ShowPaged(yamlOut)
+			} else {
+				c.Println(yamlOut)
+			}
+		},
+	}
+	return lsMoreCmd
 }
