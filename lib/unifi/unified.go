@@ -100,7 +100,7 @@ type UniFiClient struct {
 	Events         EventsService
 	Sites          SitesService
 	Users          UsersService
-	UAP		UAPService
+	UAP            UAPService
 
 	// Optional function called after every successful request made to the DO APIs
 	onRequestCompleted RequestCompletionCallback

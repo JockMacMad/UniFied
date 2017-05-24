@@ -1,26 +1,26 @@
 package main
 
 import (
-	unified "bitbucket.org/ecosse-hosting/unified/lib/unifi"
 	shell "bitbucket.org/ecosse-hosting/unified/lib/shell"
+	unified "bitbucket.org/ecosse-hosting/unified/lib/unifi"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/abiosoft/ishell"
+	"github.com/fatih/color"
 	"github.com/fatih/structs"
+	yaml2 "github.com/ghodss/yaml"
 	"github.com/jawher/mow.cli"
 	"github.com/olekukonko/tablewriter"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
-	"time"
-	yaml2 "github.com/ghodss/yaml"
-	"github.com/abiosoft/ishell"
-	"github.com/fatih/color"
 	"strings"
+	"time"
 )
 
 var (
@@ -488,6 +488,36 @@ func main() {
 									fmt.Println(cmdResp.Meta.Status)
 								}
 							})
+						cmd2.Command(
+							"disable",
+							"Disables the UAP.",
+							func(cmd3 *cli.Cmd) {
+								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+									"The MAC address of the uap device to target.")
+								cmd3.Action = func() {
+									fmt.Println("\nunified devices uap cmd disable MAC_ADDRESS\n")
+									cmdResp, _, err := cx.UAP.DisableAP(ctx, *macAddress, true)
+									if err != nil {
+
+									}
+									fmt.Println(cmdResp.Meta.Status)
+								}
+							})
+						cmd2.Command(
+							"enable",
+							"Reenables a previously disabled UAP.",
+							func(cmd3 *cli.Cmd) {
+								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+									"The MAC address of the uap device to target.")
+								cmd3.Action = func() {
+									fmt.Println("\nunified devices uap cmd enable MAC_ADDRESS\n")
+									cmdResp, _, err := cx.UAP.DisableAP(ctx, *macAddress, false)
+									if err != nil {
+
+									}
+									fmt.Println(cmdResp.Meta.Status)
+								}
+							})
 					})
 			})
 		cmd.Command(
@@ -606,8 +636,6 @@ func main() {
 			shell.Start()
 		}
 	})
-
-
 
 	app.Run(os.Args)
 }
@@ -1422,7 +1450,6 @@ func addUAPCommands() *ishell.Cmd {
 	uapLs.AddCmd(uapLsMoreCmd)
 	uap.AddCmd(uapLs)
 
-
 	uapCmd := &ishell.Cmd{
 		Name: "cmd",
 		Help: "Send a Command to an Access Point (UAP).",
@@ -1434,7 +1461,6 @@ func addUAPCommands() *ishell.Cmd {
 		"uap",
 		true,
 	)
-
 	uapUnsetLocateCmd := devicesLocateCmd(
 		"unset-locate",
 		"Disables the LED on a UAP to help with locating it.",
@@ -1444,8 +1470,50 @@ func addUAPCommands() *ishell.Cmd {
 	uapCmd.AddCmd(uapSetLocateCmd)
 	uapCmd.AddCmd(uapUnsetLocateCmd)
 
+	uapEnableAPCmd := devicesDisableAPCmd(
+		"enable",
+		"Enables a previously disabled UAP.",
+		"uap",
+		false,
+	)
+	uapDisableAPCmd := devicesDisableAPCmd(
+		"disable",
+		"Disables a UAP.",
+		"uap",
+		true,
+	)
+	uapCmd.AddCmd(uapEnableAPCmd)
+	uapCmd.AddCmd(uapDisableAPCmd)
+
+
 	uap.AddCmd(uapCmd)
 	return uap
+}
+func devicesDisableAPCmd(name string, help string, device string, disabled bool) *ishell.Cmd {
+	cmd := &ishell.Cmd{
+		Name: name,
+		Help: help,
+		Func: func(c *ishell.Context) {
+			var macAddress string
+			if len(c.Args) > 0 {
+				macAddress = strings.Join(c.Args, " ")
+			}
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			cmdResp, _, err := cx.UAP.DisableAP(ctx, macAddress, disabled)
+			if err != nil {
+			}
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error sending Command ", name, " to ", device, " device from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			c.Println(cmdResp.Meta.Status)
+		},
+	}
+	return cmd
 }
 
 func devicesLocateCmd(name string, help string, device string, enabled bool) *ishell.Cmd {
@@ -1465,7 +1533,7 @@ func devicesLocateCmd(name string, help string, device string, enabled bool) *is
 			c.ProgressBar().Stop()
 			if err != nil {
 				color.Set(color.FgRed)
-				msgParts := []string {"Error sending Command ", name, " to ", device, " device from Unifi Controller."}
+				msgParts := []string{"Error sending Command ", name, " to ", device, " device from Unifi Controller."}
 				c.Println(strings.Join(msgParts, " "))
 				color.Set(color.FgWhite)
 			}
@@ -1486,7 +1554,7 @@ func devicesLsCmd(name string, help string, device string, paged bool) *ishell.C
 			c.ProgressBar().Stop()
 			if err != nil {
 				color.Set(color.FgRed)
-				msgParts := []string {"Error retrieving ", device, " devices from Unifi Controller."}
+				msgParts := []string{"Error retrieving ", device, " devices from Unifi Controller."}
 				c.Println(strings.Join(msgParts, " "))
 				color.Set(color.FgWhite)
 			}

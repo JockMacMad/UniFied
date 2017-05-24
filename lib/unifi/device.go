@@ -23,6 +23,7 @@ type DevicesService interface {
 	Get(context.Context, int) (*Device, *Response, error)
 	GetByMac(context.Context, string) (*Device, *Response, error)
 	GetIPFromMac(ctx context.Context, mac string) (string, error)
+	GetUUIDFromMac(ctx context.Context, mac string) (string, error)
 }
 
 // DevicesServiceOp handles communication with the Device related methods of
@@ -380,7 +381,7 @@ func (s *DevicesServiceOp) GetByMac(ctx context.Context, mac string) (*Device, *
 
 	}
 
-	path := fmt.Sprintf("%s/%s", s.buildURL(), mac)
+	path := fmt.Sprintf("%s/%s", *s.buildURL(), mac)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -424,12 +425,22 @@ func (d Device) toDeviceShort() DeviceShort {
 	return shortStruct
 }
 
+// Return the current IP Address of a Device from it's MAC Address.
 func (s *DevicesServiceOp) GetIPFromMac(ctx context.Context, mac string) (string, error) {
 	device, _, err := s.GetByMac(ctx, mac)
 	if err != nil {
 		return "", err
 	}
 	return device.IP, nil
+}
+
+// Return the UUID of a Device from it's MAC Address.
+func (s *DevicesServiceOp) GetUUIDFromMac(ctx context.Context, mac string) (string, error) {
+	device, _, err := s.GetByMac(ctx, mac)
+	if err != nil {
+		return "", err
+	}
+	return device.UUID, nil
 }
 
 func (s *DevicesServiceOp) buildURL() *string {
