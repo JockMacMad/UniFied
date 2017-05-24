@@ -1,15 +1,18 @@
-package lib
+package unifi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/HouzuoGuo/tiedot/db"
 	log "github.com/Sirupsen/logrus"
 	"github.com/fatih/structs"
+	"strconv"
 )
 
-const eventsBasePath = "/api/s/default/list/event"
+//const eventsBasePath = "/api/s/default/list/event"
+const eventsBasePath = "/list/event"
 
 // AccountService is an interface for interfacing with the Account
 // endpoints of the DigitalOcean API
@@ -80,7 +83,8 @@ type Event struct {
 
 // List all alarms
 func (s *EventsServiceOp) List(ctx context.Context, opt *ListOptions) ([]Event, *Response, error) {
-	path := eventsBasePath
+	//path := eventsBasePath
+	path := *s.buildURL()
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -184,7 +188,8 @@ func (s *EventsServiceOp) Get(ctx context.Context, id int) (*Event, *Response, e
 		return nil, nil, NewArgError("id", "cannot be less than 1")
 	}
 
-	path := fmt.Sprintf("%s/%d", eventsBasePath, id)
+	//path := fmt.Sprintf("%s/%d", eventsBasePath, id)
+	path := *s.buildURLWithId(id)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -197,4 +202,22 @@ func (s *EventsServiceOp) Get(ctx context.Context, id int) (*Event, *Response, e
 	}
 
 	return root.Event, resp, err
+}
+
+func (s *EventsServiceOp) buildURL() *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(s.client.BaseURL.String())
+	buffer.WriteString(*s.client.SiteName)
+	buffer.WriteString(eventsBasePath)
+	path := buffer.String()
+	return &path
+}
+
+func (s *EventsServiceOp) buildURLWithId(id int) *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(*s.buildURL())
+	buffer.WriteString("/")
+	buffer.WriteString(strconv.Itoa(id))
+	path := buffer.String()
+	return &path
 }

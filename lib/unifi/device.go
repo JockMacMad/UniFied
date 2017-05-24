@@ -1,15 +1,18 @@
-package lib
+package unifi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/HouzuoGuo/tiedot/db"
 	log "github.com/Sirupsen/logrus"
 	"github.com/fatih/structs"
+	"strconv"
 )
 
-const devicesBasePath = "/api/s/default/stat/device"
+//const devicesBasePath = "/api/s/default/stat/device"
+const devicesBasePath = "/stat/device"
 
 // DeviceService is an interface for interfacing with the Device
 // endpoints of the UniFi API
@@ -18,11 +21,13 @@ type DevicesService interface {
 	List(context.Context, *ListOptions) ([]Device, *Response, error)
 	ListShort(context.Context, string, *ListOptions) ([]DeviceShort, *Response, error)
 	Get(context.Context, int) (*Device, *Response, error)
+	//GetState(context.Context, int) (*Device, *Response, error)
 	GetByMac(context.Context, string) (*Device, *Response, error)
 	GetIPFromMac(ctx context.Context, mac string) (string, error)
+	GetUUIDFromMac(ctx context.Context, mac string) (string, error)
 }
 
-// AlarmsServiceOp handles communication with the Alarm related methods of
+// DevicesServiceOp handles communication with the Device related methods of
 // the UniFi API.
 type DevicesServiceOp struct {
 	client *UniFiClient
@@ -33,7 +38,7 @@ type devicesRoot struct {
 }
 
 type deviceRoot struct {
-	Device []Device `json:"data"`
+	Device Device `json:"data"`
 }
 
 var _ DevicesService = &DevicesServiceOp{}
@@ -50,6 +55,7 @@ type Device struct {
 	ConnectRequestPort     string          `json:"connect_request_port,omitempty"`
 	DeviceId               string          `json:"device_id,omitempty"`
 	DhcpServerTable        []string        `json:"dhcp_server_table,omitempty"`
+	IsDisabled		bool		`json:"disabled,omitempty"`
 	IsDot1xPortCtrlEnabled bool            `json:"dot1x_portctrl_enabled,omitempty"`
 	DownLinks              []DownLinkTable `json:"downlink_table,omitempty"`
 	Ethernet               []EthernetTable `json:"ethernet_table,omitempty"`
@@ -87,6 +93,7 @@ type DeviceShort struct {
 	Type       string `json:"type,omitempty"`
 	Serial     string `json:"serial,omitempty"`
 	SiteId     string `json:"site_id,omitempty"`
+	State      string `json:"state"`
 	MacAddress string `json:"mac,omitempty"`
 	Name       string `json:"name,omitempty"`
 	Model      string `json:"model,omitempty"`
@@ -191,7 +198,8 @@ type SysStats struct {
 
 // List all devices
 func (s *DevicesServiceOp) List(ctx context.Context, opt *ListOptions) ([]Device, *Response, error) {
-	path := devicesBasePath
+	//path := devicesBasePath
+	path := *s.buildURL()
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -223,7 +231,8 @@ func (s *DevicesServiceOp) List(ctx context.Context, opt *ListOptions) ([]Device
 
 // List all devices
 func (s *DevicesServiceOp) ListShort(ctx context.Context, filter string, opt *ListOptions) ([]DeviceShort, *Response, error) {
-	path := devicesBasePath
+	//path := devicesBasePath
+	path := *s.buildURL()
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -259,6 +268,7 @@ func (s *DevicesServiceOp) ListShort(ctx context.Context, filter string, opt *Li
 	//log.Debug(root.Devices)
 	return deviceShortArray, resp, err
 }
+
 func DevicesDB(s *DevicesServiceOp, root *devicesRoot) *devicesRoot {
 	devicesColExists := false
 	var devicesDB *db.Col = nil
@@ -352,7 +362,7 @@ func (s *DevicesServiceOp) Get(ctx context.Context, id int) (*Device, *Response,
 
 	}
 
-	path := fmt.Sprintf("%s/%d", devicesBasePath, id)
+	path := *s.buildURLWithId(id)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -374,7 +384,7 @@ func (s *DevicesServiceOp) GetByMac(ctx context.Context, mac string) (*Device, *
 
 	}
 
-	path := fmt.Sprintf("%s/%s", devicesBasePath, mac)
+	path := fmt.Sprintf("%s/%s", *s.buildURL(), mac)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -411,13 +421,33 @@ func (d Device) Values() []string {
 }
 
 func (d Device) toDeviceShort() DeviceShort {
+	var state string
+	switch d.State {
+	case 0:
+		state = "Disconnected"
+	case 1:
+		if d.IsDisabled {
+			state = "Connected (Disabled)"
+		} else {
+			state = "Connected"
+		}
+	case 5:
+		if d.IsDisabled {
+			state = "Provisioning (Disabled)"
+		} else {
+			state = "Provisioning"
+		}
+	default:
+		state = fmt.Sprintf("Unkown State (%d)", d.State)
+	}
 	shortStruct := DeviceShort{Name: d.Name, UUID: d.UUID, Version: d.Version, SiteId: d.SiteId,
 		MacAddress: d.MacAddress, IP: d.IP, IsAdopted: d.IsAdopted, Model: d.Model, Serial: d.Serial,
-		Type: d.Type,
+		Type: d.Type, State: state,
 	}
 	return shortStruct
 }
 
+// Return the current IP Address of a Device from it's MAC Address.
 func (s *DevicesServiceOp) GetIPFromMac(ctx context.Context, mac string) (string, error) {
 	device, _, err := s.GetByMac(ctx, mac)
 	if err != nil {
@@ -426,6 +456,40 @@ func (s *DevicesServiceOp) GetIPFromMac(ctx context.Context, mac string) (string
 	return device.IP, nil
 }
 
-//func GetDeviceFromMac(mac string, short bool) Device {
+// Return the UUID of a Device from it's MAC Address.
+func (s *DevicesServiceOp) GetUUIDFromMac(ctx context.Context, mac string) (string, error) {
+	device, _, err := s.GetByMac(ctx, mac)
+	if err != nil {
+		return "", err
+	}
+	return device.UUID, nil
+}
 
-//}
+// Return the State of a Device from it's MAC Address.
+/*
+func (s *DevicesServiceOp) GetState(ctx context.Context, mac string) (string, error) {
+	device, _, err := s.GetByMac(ctx, mac)
+	if err != nil {
+		return "", err
+	}
+	return device.State, nil
+}
+*/
+
+func (s *DevicesServiceOp) buildURL() *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(s.client.BaseURL.String())
+	buffer.WriteString(*s.client.SiteName)
+	buffer.WriteString(devicesBasePath)
+	path := buffer.String()
+	return &path
+}
+
+func (s *DevicesServiceOp) buildURLWithId(id int) *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(*s.buildURL())
+	buffer.WriteString("/")
+	buffer.WriteString(strconv.Itoa(id))
+	path := buffer.String()
+	return &path
+}

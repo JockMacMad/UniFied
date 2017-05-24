@@ -1,183 +1,661 @@
 package main
 
 import (
-	unified "bitbucket.org/unified/lib"
+	shell "bitbucket.org/ecosse-hosting/unified/lib/shell"
+	unified "bitbucket.org/ecosse-hosting/unified/lib/unifi"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/abiosoft/ishell"
 	"github.com/fatih/color"
 	"github.com/fatih/structs"
+	yaml2 "github.com/ghodss/yaml"
+	"github.com/jawher/mow.cli"
 	"github.com/olekukonko/tablewriter"
-	"github.com/urfave/cli"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 var (
 	ctx = context.TODO()
+	cx  *unified.UniFiClient
 )
 
+// Simple structure representing the information needed to create a remote SSH Terminal session.
+// The exception is password which is input from stdin and not stored.
 type SSHConnection struct {
 	Username string
 	Host     string
 	Port     int
 }
 
-var ssh_port int
-var ssh_host string
-var ssh_user string
+var ssh_portOption bool
+var ssh_hostOption bool
+var ssh_userOption bool
+var table_output bool
+var json_output bool
+var yaml_output bool
+var username bool
+var password bool
+var useDBOption bool
+var daemon bool
 
 func main() {
-	app := cli.NewApp()
+	app := cli.App("unified", "Unified CLI for Ubiquiti UniFi")
+	app.Version("v version", "unified 0.0.1")
+	app.Spec = "-u -p -c ([-b -c]) [-s]"
 
-	// Only log the warning severity or above.
-	log.SetLevel(log.WarnLevel)
-
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Timeout: time.Second * 300, Transport: tr}
-	_, err := client.Get("https://golang.org/")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	d := &unified.UnifiedDBOptions{
-		DbUsageEnabled: true,
-		UseInMemoryDB:  true,
-	}
-
-	o := &unified.UnifiedOptions{
-		DbUsage: d,
-	}
-
-	cx := unified.NewUniFiClient(client, o)
-
-	cx.Authentication.Login(ctx, "donstewa", "Blackadder!782")
-
-	app.Name = "Unified"
-	app.Version = "0.0.1"
-	app.Compiled = time.Now()
-	app.Authors = []cli.Author{
-		cli.Author{
-			Name:  "Don Stewart",
-			Email: "don.stewart at icloud.com",
-		},
-	}
-	app.Copyright = "(c) 2017 Ecosse Hosting"
-	app.HelpName = "Unified - Ubiquiti UniFi Tools"
-	app.Usage = "unified help"
-	app.UsageText = "Unified - demonstrating the available API"
-
-	fmt.Print("\n\n\n" + app.HelpName + "\nVersion :\t" + app.Version + "\n" + app.Copyright + "\n\n")
-
-	app.Flags = []cli.Flag{
-		cli.BoolTFlag{
-			Name:  "UseDB, db, b",
-			Usage: "Enable the use of a DB for storing data from the UniFi Controller.",
-		},
-		cli.BoolTFlag{
-			Name:  "UseCache, c",
-			Usage: "Enable the use of the internal DB for retreiving data. Implies -db",
-		},
-		cli.BoolTFlag{
-			Name:  "Daemon, d",
-			Usage: "Runs Unified as a daemon.",
-		},
-	}
-
-	app.Commands = []cli.Command{
-		cli.Command{
-			Name:        "db",
-			Aliases:     []string{"database"},
-			Category:    "Database",
-			Usage:       "do the doo",
-			UsageText:   "doo - does the dooing",
-			Description: "Manages the Unified DB if enabled.",
-			ArgsUsage:   "[arrgh]",
-			Flags: []cli.Flag{
-				cli.BoolTFlag{Name: "db, UseDB"},
+	var (
+		useDB = app.Bool(
+			cli.BoolOpt{
+				Name:      "b useDB",
+				Value:     true,
+				Desc:      "Enable the use of a DB for storing data from the UniFi Controller.",
+				EnvVar:    "UNIFIED_USEDB",
+				SetByUser: &useDBOption,
 			},
-			Subcommands: cli.Commands{
-				cli.Command{
-					Name:  "clean",
-					Usage: "Drops the selected stored data returning the DB to an empty state.",
-					Action: func(c *cli.Context) error {
-						fmt.Println("new task template: ", c.Args().First())
-						return nil
-					},
-					Subcommands: cli.Commands{
-						cli.Command{
-							Name:  "all",
-							Usage: "Drops all the currently stored data returning the DB to an empty state.",
-							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
-								return nil
-							},
-						},
-						cli.Command{
-							Name:  "alarms",
-							Usage: "Drops all the currently stored alarm data only.",
-							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
-								return nil
-							},
-						},
-						cli.Command{
-							Name:  "events",
-							Usage: "Drops all the currently stored event data only.",
-							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
-								return nil
-							},
-						},
-						cli.Command{
-							Name:  "users",
-							Usage: "Drops all the currently stored user data only.",
-							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
-								return nil
-							},
-						},
-					},
+		)
+
+		useCache = app.Bool(
+			cli.BoolOpt{
+				Name:      "c useCache",
+				Value:     true,
+				Desc:      "Enable the use of the internal DB for retreiving data. Implies -db.",
+				EnvVar:    "UNIFIED_USE_CACHE",
+				SetByUser: &useDBOption,
+			},
+		)
+		/*
+			daemon = app.Bool(
+				cli.BoolOpt{
+					Name:      "d daemon",
+					Value:     false,
+					Desc:      "Runs Unified as a daemon.",
+					EnvVar:    "UNIFIED_DAEMON",
+					SetByUser: &daemon,
 				},
+			)
+		*/
+
+		user = app.String(
+			cli.StringOpt{
+				Name:      "u username",
+				Value:     "",
+				Desc:      "Runs Unified as a daemon.",
+				EnvVar:    "UNIFIED_USER",
+				SetByUser: &username,
 			},
-			SkipFlagParsing: false,
-			HideHelp:        false,
-			Hidden:          false,
-			HelpName:        "database",
-			BashComplete: func(c *cli.Context) {
-				fmt.Fprintf(c.App.Writer, "--better\n")
+		)
+
+		pass = app.String(
+			cli.StringOpt{
+				Name:      "p password",
+				Desc:      "Runs Unified as a daemon.",
+				EnvVar:    "UNIFIED_PASSWORD",
+				SetByUser: &password,
 			},
-			Before: func(c *cli.Context) error {
-				fmt.Fprintf(c.App.Writer, "brace for impact\n")
-				return nil
+		)
+
+		controller = app.String(
+			cli.StringOpt{
+				Name:   "c controller",
+				Desc:   "Set the UniFi Controller address.",
+				EnvVar: "UNIFIED_CONTROLLER",
 			},
-			After: func(c *cli.Context) error {
-				fmt.Fprintf(c.App.Writer, "did we lose anyone?\n")
-				return nil
+		)
+
+		site = app.String(
+			cli.StringOpt{
+				Name:   "s site",
+				Value:  "default",
+				Desc:   "Set the UniFi Controller Site to use.",
+				EnvVar: "UNIFIED_SITE",
 			},
-			Action: func(c *cli.Context) error {
-				c.Command.FullName()
-				c.Command.HasName("wop")
-				c.Command.Names()
-				c.Command.VisibleFlags()
-				fmt.Fprintf(c.App.Writer, "dodododododoodododddooooododododooo\n")
-				if c.Bool("forever") {
-					c.Command.Run(c)
+		)
+	)
+
+	app.Before = func() {
+		// Only log the warning severity or above.
+		log.SetLevel(log.WarnLevel)
+
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Timeout: time.Second * 300, Transport: tr}
+
+		d := &unified.UnifiedDBOptions{
+			DbUsageEnabled: *useDB,
+			UseInMemoryDB:  *useCache,
+		}
+
+		o := &unified.UnifiedOptions{
+			DbUsage: d,
+		}
+
+		if *controller != "" {
+			var buffer bytes.Buffer
+			buffer.WriteString("https://")
+			buffer.WriteString(*controller)
+			buffer.WriteString("/api/s/")
+			cont_addr := buffer.String()
+			base_url, err := url.Parse(cont_addr)
+
+			if err != nil {
+				panic(err)
+			}
+
+			cx = unified.NewUniFiClient(client, o)
+			cx.BaseURL = base_url
+
+			cx.UserName = user
+			cx.Password = pass
+			cx.SiteName = site
+			cx.Authentication.Login(ctx, *user, *pass)
+		} else {
+			fmt.Println("No UniFi Controller specified!")
+			cli.Exit(999)
+		}
+	}
+
+	app.Command("controller", "Manages the Unified Controller.", func(cmd *cli.Cmd) {
+		cmd.Command(
+			"alarms",
+			"Displays a list of alarms from the Controller.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of alarms from the Controller.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Action = func() {
+							fmt.Println("\nunified controller alarms ls\n")
+							alarms, _, err := cx.Alarms.List(ctx, nil)
+							if err != nil {
+
+							}
+							for _, v := range alarms {
+								table := tablewriter.NewWriter(os.Stdout)
+								fieldNames := structs.Names(&v)
+								table.SetHeader(fieldNames)
+
+								fieldValues := structs.Values(&v)
+								valuesArray := make([]string, len(fieldValues))
+								for k, w := range fieldValues {
+									switch x := w.(type) {
+									case string:
+										valuesArray[k] = x
+									case bool:
+										valuesArray[k] = strconv.FormatBool(x)
+									case int:
+										valuesArray[k] = strconv.Itoa(x)
+									}
+								}
+								table.Append(valuesArray)
+								table.Render() // Send output
+							}
+
+						}
+					})
+			})
+		cmd.Command(
+			"events",
+			"Displays a list of events from the Controller.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of events from the Controller.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Action = func() {
+							fmt.Println("\nunified controller events ls\n")
+							alarms, _, err := cx.Events.List(ctx, nil)
+							if err != nil {
+
+							}
+							for _, v := range alarms {
+								table := tablewriter.NewWriter(os.Stdout)
+								fieldNames := structs.Names(&v)
+								table.SetHeader(fieldNames)
+
+								fieldValues := structs.Values(&v)
+								valuesArray := make([]string, len(fieldValues))
+								for k, w := range fieldValues {
+									switch x := w.(type) {
+									case string:
+										valuesArray[k] = x
+									case bool:
+										valuesArray[k] = strconv.FormatBool(x)
+									case int:
+										valuesArray[k] = strconv.Itoa(x)
+									}
+								}
+								table.Append(valuesArray)
+								table.Render() // Send output
+							}
+
+						}
+					})
+			})
+	})
+
+	app.Command("db", "Manages the Unified DB if enabled.", func(cmd *cli.Cmd) {
+		cmd.Command(
+			"clean",
+			"Drops the selected stored data returning the DB to an empty state.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"all",
+					"Drops all the currently stored data returning the DB to an empty state.",
+					func(*cli.Cmd) {
+						cmd2.Action = func() {
+							fmt.Println("new task template: ")
+						}
+					})
+				cmd2.Command(
+					"alarms",
+					"Drops all the currently stored alarm data only.",
+					func(*cli.Cmd) {
+						cmd2.Action = func() {
+							fmt.Println("new task template: ")
+						}
+					})
+				cmd2.Command(
+					"events",
+					"Drops all the currently stored event data only.",
+					func(*cli.Cmd) {
+						cmd2.Action = func() {
+							fmt.Println("new task template: ")
+						}
+					})
+				cmd2.Command(
+					"users",
+					"Drops all the currently stored user data only.",
+					func(*cli.Cmd) {
+						cmd2.Action = func() {
+							fmt.Println("new task template: ")
+						}
+					})
+
+			})
+	})
+
+	app.Command("device", "UniFi devices command & sub-commands.", func(cmd *cli.Cmd) {
+		cmd.Command(
+			"ls",
+			"Displays a list of known UniFi devices (of all types).",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Spec = "-tjy"
+				tableo := cmd2.Bool(cli.BoolOpt{
+					Name:      "t table",
+					Value:     true,
+					Desc:      "Displays device short data in a table on the console.",
+					SetByUser: &table_output,
+				})
+				jsono := cmd2.Bool(cli.BoolOpt{
+					Name:      "j json",
+					Desc:      "Displays device short data in JSON on the console.",
+					SetByUser: &json_output,
+				})
+				yamlo := cmd2.Bool(cli.BoolOpt{
+					Name:      "y yaml",
+					Desc:      "Displays device short data in YAML on the console.",
+					SetByUser: &yaml_output,
+				})
+				cmd2.Action = func() {
+					fmt.Println("\nunified devices ls\n")
+					devices, _, err := cx.Devices.ListShort(ctx, "all", nil)
+					if err != nil {
+					}
+					if *yamlo {
+						devices = OutputDeviceArrayToYAML(devices)
+					} else {
+						if *jsono {
+							devices = DeviceArrayToJSON(devices)
+						} else {
+							if *tableo {
+								outputDevicesToTable(devices)
+							}
+						}
+					}
 				}
-				return nil
-			},
-			OnUsageError: func(c *cli.Context, err error, isSubcommand bool) error {
-				fmt.Fprintf(c.App.Writer, "for shame\n")
-				return err
-			},
-		},
+			})
+		cmd.Command(
+			"inspect",
+			"View detailed configuration of a running Unifi Device.",
+			func(cmd2 *cli.Cmd) {
+				macAddress := cmd2.StringArg("MAC_ADDRESS", "", "The MAC address of the device to inspect.")
+				cmd2.Action = func() {
+					fmt.Println("\nunified devices inspect\n")
+					device, _, err := cx.Devices.GetByMac(ctx, *macAddress)
+					if err != nil {
+
+					}
+					DeviceToJSON(device)
+				}
+			})
+		cmd.Command(
+			"ugw",
+			"Commands relating to a UniFi Security Gateway (UGW) aka USG.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of known UniFi USGs.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Spec = "-tjy"
+						tableo := cmd3.Bool(cli.BoolOpt{
+							Name:      "t table",
+							Value:     true,
+							Desc:      "Displays device short data in a table on the console.",
+							SetByUser: &table_output,
+						})
+						jsono := cmd3.Bool(cli.BoolOpt{
+							Name:      "j json",
+							Desc:      "Displays device short data in JSON on the console.",
+							SetByUser: &json_output,
+						})
+						yamlo := cmd2.Bool(cli.BoolOpt{
+							Name:      "y yaml",
+							Desc:      "Displays device short data in YAML on the console.",
+							SetByUser: &yaml_output,
+						})
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices ugw ls\n")
+							devices, _, err := cx.Devices.ListShort(ctx, "ugw", nil)
+							if err != nil {
+							}
+							if *yamlo {
+								devices = OutputDeviceArrayToYAML(devices)
+							} else {
+								if *jsono {
+									devices = DeviceArrayToJSON(devices)
+								} else {
+									if *tableo {
+										outputDevicesToTable(devices)
+									}
+								}
+							}
+						}
+					})
+				cmd2.Command(
+					"inspect",
+					"View configuration of a running Unifi USG.",
+					func(cmd3 *cli.Cmd) {
+						macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+							"The MAC address of the device to inspect.")
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices ugw inspect MAC_ADDRESS\n")
+							device, _, err := cx.Devices.GetByMac(ctx, *macAddress)
+							if err != nil {
+
+							}
+							DeviceToJSON(device)
+						}
+					})
+			})
+		cmd.Command(
+			"uap",
+			"Commands relating to a UniFi Access Point (UAP).",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of known UniFi UAPs.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Spec = "-tjy"
+						tableo := cmd3.Bool(cli.BoolOpt{
+							Name:      "t table",
+							Value:     true,
+							Desc:      "Displays device short data in a table on the console.",
+							SetByUser: &table_output,
+						})
+						jsono := cmd3.Bool(cli.BoolOpt{
+							Name:      "j json",
+							Desc:      "Displays device short data in JSON on the console.",
+							SetByUser: &json_output,
+						})
+						yamlo := cmd2.Bool(cli.BoolOpt{
+							Name:      "y yaml",
+							Desc:      "Displays device short data in YAML on the console.",
+							SetByUser: &yaml_output,
+						})
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices uap ls\n")
+							devices, _, err := cx.Devices.ListShort(ctx, "uap", nil)
+							if err != nil {
+							}
+							if *yamlo {
+								devices = OutputDeviceArrayToYAML(devices)
+							} else {
+								if *jsono {
+									devices = DeviceArrayToJSON(devices)
+								} else {
+									if *tableo {
+										outputDevicesToTable(devices)
+									}
+								}
+							}
+						}
+					})
+				cmd2.Command(
+					"inspect",
+					"View configuration of a running Unifi UAP.",
+					func(cmd3 *cli.Cmd) {
+						macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+							"The MAC address of the device to inspect.")
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices uap inspect MAC_ADDRESS\n")
+							device, _, err := cx.Devices.GetByMac(ctx, *macAddress)
+							if err != nil {
+
+							}
+							DeviceToJSON(device)
+						}
+					})
+				cmd2.Command(
+					"cmd",
+					"A Command to send to the Unifi UAP.",
+					func(cmd2 *cli.Cmd) {
+						cmd2.Command(
+							"set-locate",
+							"Enables the LED on a UAP to help with locating it.",
+							func(cmd3 *cli.Cmd) {
+								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+									"The MAC address of the uap device to target.")
+								cmd3.Action = func() {
+									fmt.Println("\nunified devices uap cmd set-locate MAC_ADDRESS\n")
+									cmdResp, _, err := cx.UAP.SetLocate(ctx, *macAddress, true)
+									if err != nil {
+									}
+									fmt.Println(cmdResp.Meta.Status)
+								}
+							})
+						cmd2.Command(
+							"unset-locate",
+							"Disables the LED on a UAP to help with locating it.",
+							func(cmd3 *cli.Cmd) {
+								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+									"The MAC address of the uap device to target.")
+								cmd3.Action = func() {
+									fmt.Println("\nunified devices uap cmd unset-locate MAC_ADDRESS\n")
+									cmdResp, _, err := cx.UAP.SetLocate(ctx, *macAddress, false)
+									if err != nil {
+
+									}
+									fmt.Println(cmdResp.Meta.Status)
+								}
+							})
+						cmd2.Command(
+							"disable",
+							"Disables the UAP.",
+							func(cmd3 *cli.Cmd) {
+								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+									"The MAC address of the uap device to target.")
+								cmd3.Action = func() {
+									fmt.Println("\nunified devices uap cmd disable MAC_ADDRESS\n")
+									cmdResp, _, err := cx.UAP.DisableAP(ctx, *macAddress, true)
+									if err != nil {
+
+									}
+									fmt.Println(cmdResp.Meta.Status)
+								}
+							})
+						cmd2.Command(
+							"enable",
+							"Reenables a previously disabled UAP.",
+							func(cmd3 *cli.Cmd) {
+								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+									"The MAC address of the uap device to target.")
+								cmd3.Action = func() {
+									fmt.Println("\nunified devices uap cmd enable MAC_ADDRESS\n")
+									cmdResp, _, err := cx.UAP.DisableAP(ctx, *macAddress, false)
+									if err != nil {
+
+									}
+									fmt.Println(cmdResp.Meta.Status)
+								}
+							})
+						cmd2.Command(
+							"restart",
+							"Restarts a UAP.",
+							func(cmd3 *cli.Cmd) {
+								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+									"The MAC address of the uap device to target.")
+								cmd3.Action = func() {
+									fmt.Println("\nunified devices uap cmd restartr MAC_ADDRESS\n")
+									cmdResp, _, err := cx.UAP.RestartAP(ctx, *macAddress)
+									if err != nil {
+
+									}
+									fmt.Println(cmdResp.Meta.Status)
+								}
+							})
+					})
+			})
+		cmd.Command(
+			"usw",
+			"Commands relating to a UniFi Switch (USW).",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"ls",
+					"Displays a list of known UniFi USWs.",
+					func(cmd3 *cli.Cmd) {
+						cmd3.Spec = "-tjy"
+						tableo := cmd3.Bool(cli.BoolOpt{
+							Name:      "t table",
+							Value:     true,
+							Desc:      "Displays device short data in a table on the console.",
+							SetByUser: &table_output,
+						})
+						jsono := cmd3.Bool(cli.BoolOpt{
+							Name:      "j json",
+							Desc:      "Displays device short data in JSON on the console.",
+							SetByUser: &json_output,
+						})
+						yamlo := cmd3.Bool(cli.BoolOpt{
+							Name:      "y yaml",
+							Desc:      "Displays device short data in YAML on the console.",
+							SetByUser: &yaml_output,
+						})
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices usw ls\n")
+							devices, _, err := cx.Devices.ListShort(ctx, "usw", nil)
+							if err != nil {
+							}
+							if *yamlo {
+								devices = OutputDeviceArrayToYAML(devices)
+							} else {
+								if *jsono {
+									devices = DeviceArrayToJSON(devices)
+								} else {
+									if *tableo {
+										outputDevicesToTable(devices)
+									}
+								}
+							}
+						}
+					})
+				cmd2.Command(
+					"inspect",
+					"View configuration of a running Unifi USW.",
+					func(cmd3 *cli.Cmd) {
+						macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+							"The MAC address of the device to inspect.")
+						cmd3.Action = func() {
+							fmt.Println("\nunified devices usw inspect MAC_ADDRESS\n")
+							device, _, err := cx.Devices.GetByMac(ctx, *macAddress)
+							if err != nil {
+
+							}
+							DeviceToJSON(device)
+						}
+					})
+			})
+	})
+
+	app.Command("exec", "Open a remote SSH Shell.", func(cmd *cli.Cmd) {
+		cmd.Spec = "MAC_ADDRESS (-U [-P])"
+		macAddress := cmd.StringArg("MAC_ADDRESS", "",
+			"The MAC address of the device to ssh to.")
+		ssh_user := cmd.String(cli.StringOpt{
+			Name:      "U sshuser",
+			Desc:      "Connects via SSH using the -U SSH_USERNAME supplied.",
+			EnvVar:    "UNIFIED_SSH_USERNAME",
+			SetByUser: &ssh_userOption,
+		})
+		/*
+			cmd.String(cli.StringOpt{
+				Name: "P sshpass",
+				Desc: "Connects via SSH using the -P SSH_PASSWORD supplied.",
+				EnvVar:    "UNIFIED_SSH_PASSWORD",
+				SetByUser: &sshpass,
+			})
+		*/
+		ssh_port := cmd.Int(cli.IntOpt{
+			Name:      "P ssh_port",
+			Desc:      "Connects via SSH using the supplied port or defaults to 22.",
+			Value:     22,
+			EnvVar:    "UNIFIED_SSH_PORT",
+			SetByUser: &ssh_portOption,
+		})
+		cmd.Action = func() {
+			ip_address, err := cx.Devices.GetIPFromMac(ctx, *macAddress)
+			if err != nil {
+
+			}
+			_, session, err :=
+				unified.ConnectToSSHHost(*ssh_user, ip_address+":"+strconv.Itoa(*ssh_port))
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("Established SSH Connection as " + *ssh_user)
+			out, err := session.CombinedOutput(os.Args[3])
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(string(out))
+		}
+	})
+
+	app.Command("shell", "Starts a Unified Interactive Shell", func(cmd *cli.Cmd) {
+		cmd.Action = func() {
+			shell := shell.NewUnifiedShell()
+			// Read and write history to $HOME/.ishell_history
+			shell.SetHomeHistoryPath(".unified_history")
+			shell.SetPrompt("unified --> ")
+			shell.ShowPrompt(true)
+			addShellCommands(shell)
+			shell.Start()
+		}
+	})
+
+	app.Run(os.Args)
+}
+
+/*
 		cli.Command{
 			Name:     "devices",
 			Category: "Devices",
@@ -187,39 +665,6 @@ func main() {
 				return nil
 			},
 			Subcommands: cli.Commands{
-				cli.Command{
-					Name:    "ls",
-					Aliases: []string{"list"},
-					Usage:   "Displays a list of known UniFi devices (of all types).",
-					Action: func(c *cli.Context) error {
-						fmt.Println("\nunified devices ls\n")
-						devices, _, err := cx.Devices.ListShort(ctx, "all", nil)
-						if err != nil {
-							return nil
-						}
-						table := tablewriter.NewWriter(os.Stdout)
-						for _, v := range devices {
-							fieldNames := structs.Names(&v)
-							table.SetHeader(fieldNames)
-
-							fieldValues := structs.Values(&v)
-							valuesArray := make([]string, len(fieldValues))
-							for k, w := range fieldValues {
-								switch x := w.(type) {
-								case string:
-									valuesArray[k] = x
-								case bool:
-									valuesArray[k] = strconv.FormatBool(x)
-								case int:
-									valuesArray[k] = strconv.Itoa(x)
-								}
-							}
-							table.Append(valuesArray)
-						}
-						table.Render() // Send output
-						return nil
-					},
-				},
 				cli.Command{
 					Name:      "inspect",
 					Aliases:   []string{"info"},
@@ -231,9 +676,7 @@ func main() {
 						if err != nil {
 							return nil
 						}
-						enc := json.NewEncoder(os.Stdout)
-						enc.SetIndent("", "    ")
-						enc.Encode(device)
+						DeviceToJSON(device)
 
 						return nil
 					},
@@ -252,32 +695,30 @@ func main() {
 							Name:    "ls",
 							Aliases: []string{"list"},
 							Usage:   "Displays a list of known UniFi USGs.",
+							Flags: []cli.Flag{
+								cli.BoolTFlag{
+									Name:        "table, T",
+									Usage:       "Displays device short data in a table on the console.",
+									Destination: &table_output,
+								},
+								cli.BoolFlag{
+									Name:        "json, J",
+									Usage:       "Displays device short data in JSON on the console.",
+									Destination: &json_output,
+								},
+							},
 							Action: func(c *cli.Context) error {
 								fmt.Println("\nunified devices ugw ls\n")
 								devices, _, err := cx.Devices.ListShort(ctx, "ugw", nil)
 								if err != nil {
 									return nil
 								}
-								table := tablewriter.NewWriter(os.Stdout)
-								for _, v := range devices {
-									fieldNames := structs.Names(&v)
-									table.SetHeader(fieldNames)
-
-									fieldValues := structs.Values(&v)
-									valuesArray := make([]string, len(fieldValues))
-									for k, w := range fieldValues {
-										switch x := w.(type) {
-										case string:
-											valuesArray[k] = x
-										case bool:
-											valuesArray[k] = strconv.FormatBool(x)
-										case int:
-											valuesArray[k] = strconv.Itoa(x)
-										}
-									}
-									table.Append(valuesArray)
+								if json_output {
+									devices = DeviceArrayToJSON(devices)
 								}
-								table.Render() // Send output
+								if table_output {
+									outputDevicesToTable(devices)
+								}
 								return nil
 							},
 						},
@@ -294,7 +735,12 @@ func main() {
 							Aliases: []string{"info"},
 							Usage:   "View configuration of a running Unifi USG.",
 							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
+								fmt.Println("\nunified devices ugw inspect `mac_address`\n")
+								device, _, err := cx.Devices.GetByMac(ctx, c.Args().Get(0))
+								if err != nil {
+									return nil
+								}
+								DeviceToJSON(device)
 								return nil
 							},
 						},
@@ -314,32 +760,30 @@ func main() {
 							Name:    "ls",
 							Aliases: []string{"list"},
 							Usage:   "Displays a list of known Unifi APs.",
+							Flags: []cli.Flag{
+								cli.BoolTFlag{
+									Name:        "table, T",
+									Usage:       "Displays device short data in a table on the console.",
+									Destination: &table_output,
+								},
+								cli.BoolFlag{
+									Name:        "json, J",
+									Usage:       "Displays device short data in JSON on the console.",
+									Destination: &json_output,
+								},
+							},
 							Action: func(c *cli.Context) error {
 								fmt.Println("\nunified devices uap ls\n")
 								devices, _, err := cx.Devices.ListShort(ctx, "uap", nil)
 								if err != nil {
 									return nil
 								}
-								table := tablewriter.NewWriter(os.Stdout)
-								for _, v := range devices {
-									fieldNames := structs.Names(&v)
-									table.SetHeader(fieldNames)
-
-									fieldValues := structs.Values(&v)
-									valuesArray := make([]string, len(fieldValues))
-									for k, w := range fieldValues {
-										switch x := w.(type) {
-										case string:
-											valuesArray[k] = x
-										case bool:
-											valuesArray[k] = strconv.FormatBool(x)
-										case int:
-											valuesArray[k] = strconv.Itoa(x)
-										}
-									}
-									table.Append(valuesArray)
+								if json_output {
+									devices = DeviceArrayToJSON(devices)
 								}
-								table.Render() // Send output
+								if table_output {
+									outputDevicesToTable(devices)
+								}
 								return nil
 							},
 						},
@@ -356,7 +800,12 @@ func main() {
 							Aliases: []string{"info"},
 							Usage:   "View configuration of a running AP.",
 							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
+								fmt.Println("\nunified devices uap inspect `mac_address`\n")
+								device, _, err := cx.Devices.GetByMac(ctx, c.Args().Get(0))
+								if err != nil {
+									return nil
+								}
+								DeviceToJSON(device)
 								return nil
 							},
 						},
@@ -376,32 +825,30 @@ func main() {
 							Name:    "ls",
 							Aliases: []string{"list"},
 							Usage:   "Displays a list of known Unifi Switches.",
+							Flags: []cli.Flag{
+								cli.BoolTFlag{
+									Name:        "table, T",
+									Usage:       "Displays device short data in a table on the console.",
+									Destination: &table_output,
+								},
+								cli.BoolFlag{
+									Name:        "json, J",
+									Usage:       "Displays device short data in JSON on the console.",
+									Destination: &json_output,
+								},
+							},
 							Action: func(c *cli.Context) error {
 								fmt.Println("\nunified devices usw ls\n")
 								devices, _, err := cx.Devices.ListShort(ctx, "usw", nil)
 								if err != nil {
 									return nil
 								}
-								table := tablewriter.NewWriter(os.Stdout)
-								for _, v := range devices {
-									fieldNames := structs.Names(&v)
-									table.SetHeader(fieldNames)
-
-									fieldValues := structs.Values(&v)
-									valuesArray := make([]string, len(fieldValues))
-									for k, w := range fieldValues {
-										switch x := w.(type) {
-										case string:
-											valuesArray[k] = x
-										case bool:
-											valuesArray[k] = strconv.FormatBool(x)
-										case int:
-											valuesArray[k] = strconv.Itoa(x)
-										}
-									}
-									table.Append(valuesArray)
+								if json_output {
+									devices = DeviceArrayToJSON(devices)
 								}
-								table.Render() // Send output
+								if table_output {
+									outputDevicesToTable(devices)
+								}
 								return nil
 							},
 						},
@@ -419,7 +866,12 @@ func main() {
 							ArgsUsage: "[mac_address]",
 							Usage:     "View configuration of a running Unifi Switch.",
 							Action: func(c *cli.Context) error {
-								fmt.Println("new task template: ", c.Args().First())
+								fmt.Println("\nunified devices usw inspect `mac_address`\n")
+								device, _, err := cx.Devices.GetByMac(ctx, c.Args().Get(0))
+								if err != nil {
+									return nil
+								}
+								DeviceToJSON(device)
 								return nil
 							},
 						},
@@ -846,19 +1298,323 @@ func main() {
 
 	app.Run(os.Args)
 }
+*/
 
-func wopAction(c *cli.Context) error {
-	fmt.Fprintf(c.App.Writer, ":wave: over here, eh\n")
-	return nil
+func CmdRespToJSON(resp *unified.UAPCmdResp) {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "    ")
+	enc.Encode(resp)
 }
 
-func setup() {
-	client := unified.NewUniFiClient(nil, nil)
-	value, err := url.Parse("https://192.168.10.7:8443/api/s/")
+func DeviceToJSON(device *unified.Device) {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "    ")
+	enc.Encode(device)
+}
 
+func OutputDeviceArrayToYAML(devices []unified.DeviceShort) []unified.DeviceShort {
+	table_output = false
+	devices, y := deviceArrayToYAMLString(devices)
+	fmt.Println(string(y))
+	return devices
+}
+
+func deviceArrayToYAMLString(devices []unified.DeviceShort) ([]unified.DeviceShort, string) {
+	yaml := new(bytes.Buffer)
+	enc := json.NewEncoder(yaml)
+	enc.SetIndent("", "    ")
+	enc.Encode(devices)
+	y, err := yaml2.JSONToYAML(yaml.Bytes())
 	if err != nil {
-		//log.Fatal(err)
-	} else {
-		client.BaseURL = value
+		fmt.Printf("err: %v\n", err)
 	}
+	return devices, string(y)
+}
+
+func DeviceArrayToJSON(devices []unified.DeviceShort) []unified.DeviceShort {
+	table_output = false
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "    ")
+	enc.Encode(devices)
+	return devices
+}
+
+func outputDevicesToTable(devices []unified.DeviceShort) {
+	table := tablewriter.NewWriter(os.Stdout)
+	for _, v := range devices {
+		fieldNames := structs.Names(&v)
+		table.SetHeader(fieldNames)
+
+		fieldValues := structs.Values(&v)
+		valuesArray := make([]string, len(fieldValues))
+		for k, w := range fieldValues {
+			switch x := w.(type) {
+			case string:
+				valuesArray[k] = x
+			case bool:
+				valuesArray[k] = strconv.FormatBool(x)
+			case int:
+				valuesArray[k] = strconv.Itoa(x)
+			}
+		}
+		table.Append(valuesArray)
+	}
+	table.Render()
+	// Send output
+}
+
+func addShellCommands(shell *ishell.Shell) {
+
+	devicesCmd := addDevicesCommand()
+
+	shell.AddCmd(devicesCmd)
+}
+func addDevicesCommand() *ishell.Cmd {
+	devicesCmd := &ishell.Cmd{
+		Name: "device",
+		Help: "Unified devices commands.",
+	}
+	devicesCmd.AddCmd(&ishell.Cmd{
+		Name: "ls",
+		Help: "List all devices of all types.",
+		Func: func(c *ishell.Context) {
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			devices, _, err := cx.Devices.ListShort(ctx, "all", nil)
+			c.ProgressBar().Stop()
+			if err != nil {
+			}
+			_, yamlOut := deviceArrayToYAMLString(devices)
+			c.ShowPaged(yamlOut)
+		},
+	})
+
+	devicesCmd.AddCmd(addUGWCommands())
+	devicesCmd.AddCmd(addUSWCommands())
+	devicesCmd.AddCmd(addUAPCommands())
+
+	return devicesCmd
+}
+
+func addUGWCommands() *ishell.Cmd {
+	// simulate an authentication
+	ugwCmd := &ishell.Cmd{
+		Name: "ugw",
+		Help: "Unified Gateway (UGW/USG) commands.",
+	}
+	ugwLsCmd := devicesLsCmd(
+		"ls",
+		"List devices of type (UGW/USG). Non-Paged Output.",
+		"ugw",
+		false,
+	)
+	ugwLsMoreCmd := devicesLsCmd(
+		"more",
+		"List devices of type (UGW/USG). Paged Output.",
+		"ugw",
+		true,
+	)
+	ugwLsCmd.AddCmd(ugwLsMoreCmd)
+	ugwCmd.AddCmd(ugwLsCmd)
+	return ugwCmd
+}
+
+func addUSWCommands() *ishell.Cmd {
+	// simulate an authentication
+	uswCmd := &ishell.Cmd{
+		Name: "usw",
+		Help: "Unified Gateway (USW) commands.",
+	}
+	uswLsCmd := devicesLsCmd(
+		"ls",
+		"List devices of type (USW). Non-Paged Output.",
+		"usw",
+		false,
+	)
+	uswLsMoreCmd := devicesLsCmd(
+		"more",
+		"List devices of type (USW). Paged Output.",
+		"usw",
+		true,
+	)
+	uswLsCmd.AddCmd(uswLsMoreCmd)
+	uswCmd.AddCmd(uswLsCmd)
+	return uswCmd
+}
+
+func addUAPCommands() *ishell.Cmd {
+
+	uap := &ishell.Cmd{
+		Name: "uap",
+		Help: "Unified Gateway (UAP) commands.",
+	}
+
+	uapLs := devicesLsCmd(
+		"ls",
+		"List devices of type (UAP). Non-Paged Output.",
+		"uap",
+		false,
+	)
+
+	uapLsMoreCmd := devicesLsCmd(
+		"more",
+		"List devices of type (UAP). Paged Output.",
+		"uap",
+		true,
+	)
+	uapLs.AddCmd(uapLsMoreCmd)
+	uap.AddCmd(uapLs)
+
+	uapCmd := &ishell.Cmd{
+		Name: "cmd",
+		Help: "Send a Command to an Access Point (UAP).",
+	}
+
+	uapSetLocateCmd := devicesLocateCmd(
+		"set-locate",
+		"Enables the LED on a UAP to help with locating it.",
+		"uap",
+		true,
+	)
+	uapUnsetLocateCmd := devicesLocateCmd(
+		"unset-locate",
+		"Disables the LED on a UAP to help with locating it.",
+		"uap",
+		false,
+	)
+	uapCmd.AddCmd(uapSetLocateCmd)
+	uapCmd.AddCmd(uapUnsetLocateCmd)
+
+	uapEnableAPCmd := devicesDisableAPCmd(
+		"enable",
+		"Enables a previously disabled UAP.",
+		"uap",
+		false,
+	)
+	uapDisableAPCmd := devicesDisableAPCmd(
+		"disable",
+		"Disables a UAP.",
+		"uap",
+		true,
+	)
+	uapCmd.AddCmd(uapEnableAPCmd)
+	uapCmd.AddCmd(uapDisableAPCmd)
+
+	uapRestartAPCmd := devicesRestartAPCmd(
+		"restart",
+		"Restarts i.e. reboots UAP.",
+		"uap",
+	)
+	uapCmd.AddCmd(uapRestartAPCmd)
+
+
+	uap.AddCmd(uapCmd)
+	return uap
+}
+
+func devicesDisableAPCmd(name string, help string, device string, disabled bool) *ishell.Cmd {
+	cmd := &ishell.Cmd{
+		Name: name,
+		Help: help,
+		Func: func(c *ishell.Context) {
+			var macAddress string
+			if len(c.Args) > 0 {
+				macAddress = strings.Join(c.Args, " ")
+			}
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			cmdResp, _, err := cx.UAP.DisableAP(ctx, macAddress, disabled)
+			if err != nil {
+			}
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error sending Command ", name, " to ", device, " device from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			c.Println(cmdResp.Meta.Status)
+		},
+	}
+	return cmd
+}
+
+func devicesRestartAPCmd(name string, help string, device string) *ishell.Cmd {
+	cmd := &ishell.Cmd{
+		Name: name,
+		Help: help,
+		Func: func(c *ishell.Context) {
+			var macAddress string
+			if len(c.Args) > 0 {
+				macAddress = strings.Join(c.Args, " ")
+			}
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			cmdResp, _, err := cx.UAP.RestartAP(ctx, macAddress)
+			if err != nil {
+			}
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error sending Command ", name, " to ", device, " device from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			c.Println(cmdResp.Meta.Status)
+		},
+	}
+	return cmd
+}
+
+func devicesLocateCmd(name string, help string, device string, enabled bool) *ishell.Cmd {
+	cmd := &ishell.Cmd{
+		Name: name,
+		Help: help,
+		Func: func(c *ishell.Context) {
+			var macAddress string
+			if len(c.Args) > 0 {
+				macAddress = strings.Join(c.Args, " ")
+			}
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			cmdResp, _, err := cx.UAP.SetLocate(ctx, macAddress, enabled)
+			if err != nil {
+			}
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error sending Command ", name, " to ", device, " device from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			c.Println(cmdResp.Meta.Status)
+		},
+	}
+	return cmd
+}
+
+func devicesLsCmd(name string, help string, device string, paged bool) *ishell.Cmd {
+	lsMoreCmd := &ishell.Cmd{
+		Name: name,
+		Help: help,
+		Func: func(c *ishell.Context) {
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			devices, _, err := cx.Devices.ListShort(ctx, device, nil)
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error retrieving ", device, " devices from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			_, yamlOut := deviceArrayToYAMLString(devices)
+			if paged {
+				c.ShowPaged(yamlOut)
+			} else {
+				c.Println(yamlOut)
+			}
+		},
+	}
+	return lsMoreCmd
 }
