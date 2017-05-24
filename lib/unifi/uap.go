@@ -10,12 +10,14 @@ import (
 
 const devMgrCmdBasePath = "/cmd/devmgr"
 const restDeviceCmdBasePath = "/rest/device"
+const updDeviceCmdBasePath = "/upd/device"
 
 // UAPService is an interface for interfacing with the UAP specific Device
 // endpoints of the UniFi API
 type UAPService interface {
 	DisableAP(ctx context.Context, macAddress string, disabled bool) (*UAPCmdResp, *Response, error)
 	IsLocating(ctx context.Context, macAddress string) (bool, error)
+	RestartAP(ctx context.Context, macAddress string) (*UAPCmdResp, *Response, error)
 	SetLocate(ctx context.Context, macAddress string, enabled bool) (*UAPCmdResp, *Response, error)
 }
 
@@ -39,31 +41,10 @@ func (uap *UAPServiceOp) DisableAP(ctx context.Context, macAddress string, disab
 		log.Error(err)
 	}
 	uapCmd := new(UAPCmdDisableAP)
-	path := fmt.Sprintf("%s/%s", *uap.buildRestDeviceURL(), uuid)
+	path := fmt.Sprintf("%s/%s", *uap.buildURL(restDeviceCmdBasePath), uuid)
 	uapCmd.Disabled = disable
 
-	// Create the HTTP Request
-	req, err := uap.client.NewRequest(ctx, "PUT", path, uapCmd)
-	// Save a copy of this request for debugging.
-	{
-		requestDump, err := httputil.DumpRequest(req, true)
-		if err != nil {
-			log.Debug(err)
-		}
-		log.Debug(string(requestDump))
-	}
-	if err != nil {
-		log.Error(err)
-	}
-	// Create the Response object to hold the results
-	root := new(UAPCmdResp)
-	// Make the HTTP Request to the UniFi Controller
-	resp, err := uap.client.Do(req, root)
-	if err != nil {
-		log.Error(err)
-		return nil, resp, err
-	}
-	return root, resp, err
+	return uap.sendCmd(ctx, "PUT", path, uapCmd)
 }
 
 // Checks to see the UniFi AP has Locating enabled i.e. it is flashing it's LED in order
@@ -82,7 +63,7 @@ func (uap *UAPServiceOp) IsLocating(ctx context.Context, macAddress string) (boo
 // macAddress is the MAC Address of the AP to configure
 // enabled is true to flash the APs LED and false is to disable the locating function.
 func (uap *UAPServiceOp) SetLocate(ctx context.Context, macAddress string, enabled bool) (*UAPCmdResp, *Response, error) {
-	path := fmt.Sprintf("%s/%s", *uap.buildDevMgrURL(), macAddress)
+	path := fmt.Sprintf("%s/%s", *uap.buildURL(devMgrCmdBasePath), macAddress)
 	uapCmd := new(UAPCmd)
 	uapCmd.MacAddress = macAddress
 	// If enabled is true the command is 'set-locate' to start flashing the APs LED
@@ -93,8 +74,24 @@ func (uap *UAPServiceOp) SetLocate(ctx context.Context, macAddress string, enabl
 		uapCmd.Cmd = "unset-locate"
 	}
 
+	return uap.sendCmd(ctx, "POST", path, uapCmd)
+}
+
+// Restarts i.e. reboots, the UniFi AP locating function to On or Off i.e. it is flashing it's LED in order
+// someone can physically locate it visibly.
+// macAddress is the MAC Address of the AP to configure
+func (uap *UAPServiceOp) RestartAP(ctx context.Context, macAddress string) (*UAPCmdResp, *Response, error) {
+	path := fmt.Sprintf("%s/%s", *uap.buildURL(devMgrCmdBasePath), macAddress)
+	uapCmd := new(UAPCmd)
+	uapCmd.MacAddress = macAddress
+	uapCmd.Cmd = "restart"
+
+	return uap.sendCmd(ctx, "POST", path, uapCmd)
+}
+
+func (uap *UAPServiceOp) sendCmd(ctx context.Context, method string, path string, uapCmd interface{}) (*UAPCmdResp, *Response, error) {
 	// Create the HTTP Request
-	req, err := uap.client.NewRequest(ctx, "POST", path, uapCmd)
+	req, err := uap.client.NewRequest(ctx, method, path, uapCmd)
 	// Save a copy of this request for debugging.
 	{
 		requestDump, err := httputil.DumpRequest(req, true)
@@ -117,20 +114,11 @@ func (uap *UAPServiceOp) SetLocate(ctx context.Context, macAddress string, enabl
 	return root, resp, err
 }
 
-func (uap *UAPServiceOp) buildDevMgrURL() *string {
+func (uap *UAPServiceOp) buildURL(basePath string) *string {
 	var buffer bytes.Buffer
 	buffer.WriteString(uap.client.BaseURL.String())
 	buffer.WriteString(*uap.client.SiteName)
-	buffer.WriteString(devMgrCmdBasePath)
-	path := buffer.String()
-	return &path
-}
-
-func (uap *UAPServiceOp) buildRestDeviceURL() *string {
-	var buffer bytes.Buffer
-	buffer.WriteString(uap.client.BaseURL.String())
-	buffer.WriteString(*uap.client.SiteName)
-	buffer.WriteString(restDeviceCmdBasePath)
+	buffer.WriteString(basePath)
 	path := buffer.String()
 	return &path
 }

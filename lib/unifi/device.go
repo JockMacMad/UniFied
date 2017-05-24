@@ -21,6 +21,7 @@ type DevicesService interface {
 	List(context.Context, *ListOptions) ([]Device, *Response, error)
 	ListShort(context.Context, string, *ListOptions) ([]DeviceShort, *Response, error)
 	Get(context.Context, int) (*Device, *Response, error)
+	//GetState(context.Context, int) (*Device, *Response, error)
 	GetByMac(context.Context, string) (*Device, *Response, error)
 	GetIPFromMac(ctx context.Context, mac string) (string, error)
 	GetUUIDFromMac(ctx context.Context, mac string) (string, error)
@@ -54,6 +55,7 @@ type Device struct {
 	ConnectRequestPort     string          `json:"connect_request_port,omitempty"`
 	DeviceId               string          `json:"device_id,omitempty"`
 	DhcpServerTable        []string        `json:"dhcp_server_table,omitempty"`
+	IsDisabled		bool		`json:"disabled,omitempty"`
 	IsDot1xPortCtrlEnabled bool            `json:"dot1x_portctrl_enabled,omitempty"`
 	DownLinks              []DownLinkTable `json:"downlink_table,omitempty"`
 	Ethernet               []EthernetTable `json:"ethernet_table,omitempty"`
@@ -91,6 +93,7 @@ type DeviceShort struct {
 	Type       string `json:"type,omitempty"`
 	Serial     string `json:"serial,omitempty"`
 	SiteId     string `json:"site_id,omitempty"`
+	State      string `json:"state"`
 	MacAddress string `json:"mac,omitempty"`
 	Name       string `json:"name,omitempty"`
 	Model      string `json:"model,omitempty"`
@@ -418,9 +421,28 @@ func (d Device) Values() []string {
 }
 
 func (d Device) toDeviceShort() DeviceShort {
+	var state string
+	switch d.State {
+	case 0:
+		state = "Disconnected"
+	case 1:
+		if d.IsDisabled {
+			state = "Connected (Disabled)"
+		} else {
+			state = "Connected"
+		}
+	case 5:
+		if d.IsDisabled {
+			state = "Provisioning (Disabled)"
+		} else {
+			state = "Provisioning"
+		}
+	default:
+		state = fmt.Sprintf("Unkown State (%d)", d.State)
+	}
 	shortStruct := DeviceShort{Name: d.Name, UUID: d.UUID, Version: d.Version, SiteId: d.SiteId,
 		MacAddress: d.MacAddress, IP: d.IP, IsAdopted: d.IsAdopted, Model: d.Model, Serial: d.Serial,
-		Type: d.Type,
+		Type: d.Type, State: state,
 	}
 	return shortStruct
 }
@@ -442,6 +464,17 @@ func (s *DevicesServiceOp) GetUUIDFromMac(ctx context.Context, mac string) (stri
 	}
 	return device.UUID, nil
 }
+
+// Return the State of a Device from it's MAC Address.
+/*
+func (s *DevicesServiceOp) GetState(ctx context.Context, mac string) (string, error) {
+	device, _, err := s.GetByMac(ctx, mac)
+	if err != nil {
+		return "", err
+	}
+	return device.State, nil
+}
+*/
 
 func (s *DevicesServiceOp) buildURL() *string {
 	var buffer bytes.Buffer

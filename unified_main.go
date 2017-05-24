@@ -284,7 +284,7 @@ func main() {
 			})
 	})
 
-	app.Command("devices", "UniFi devices command & sub-commands.", func(cmd *cli.Cmd) {
+	app.Command("device", "UniFi devices command & sub-commands.", func(cmd *cli.Cmd) {
 		cmd.Command(
 			"ls",
 			"Displays a list of known UniFi devices (of all types).",
@@ -512,6 +512,21 @@ func main() {
 								cmd3.Action = func() {
 									fmt.Println("\nunified devices uap cmd enable MAC_ADDRESS\n")
 									cmdResp, _, err := cx.UAP.DisableAP(ctx, *macAddress, false)
+									if err != nil {
+
+									}
+									fmt.Println(cmdResp.Meta.Status)
+								}
+							})
+						cmd2.Command(
+							"restart",
+							"Restarts a UAP.",
+							func(cmd3 *cli.Cmd) {
+								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+									"The MAC address of the uap device to target.")
+								cmd3.Action = func() {
+									fmt.Println("\nunified devices uap cmd restartr MAC_ADDRESS\n")
+									cmdResp, _, err := cx.UAP.RestartAP(ctx, *macAddress)
 									if err != nil {
 
 									}
@@ -1356,7 +1371,7 @@ func addShellCommands(shell *ishell.Shell) {
 }
 func addDevicesCommand() *ishell.Cmd {
 	devicesCmd := &ishell.Cmd{
-		Name: "devices",
+		Name: "device",
 		Help: "Unified devices commands.",
 	}
 	devicesCmd.AddCmd(&ishell.Cmd{
@@ -1485,10 +1500,18 @@ func addUAPCommands() *ishell.Cmd {
 	uapCmd.AddCmd(uapEnableAPCmd)
 	uapCmd.AddCmd(uapDisableAPCmd)
 
+	uapRestartAPCmd := devicesRestartAPCmd(
+		"restart",
+		"Restarts i.e. reboots UAP.",
+		"uap",
+	)
+	uapCmd.AddCmd(uapRestartAPCmd)
+
 
 	uap.AddCmd(uapCmd)
 	return uap
 }
+
 func devicesDisableAPCmd(name string, help string, device string, disabled bool) *ishell.Cmd {
 	cmd := &ishell.Cmd{
 		Name: name,
@@ -1501,6 +1524,33 @@ func devicesDisableAPCmd(name string, help string, device string, disabled bool)
 			c.ProgressBar().Indeterminate(true)
 			c.ProgressBar().Start()
 			cmdResp, _, err := cx.UAP.DisableAP(ctx, macAddress, disabled)
+			if err != nil {
+			}
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error sending Command ", name, " to ", device, " device from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			c.Println(cmdResp.Meta.Status)
+		},
+	}
+	return cmd
+}
+
+func devicesRestartAPCmd(name string, help string, device string) *ishell.Cmd {
+	cmd := &ishell.Cmd{
+		Name: name,
+		Help: help,
+		Func: func(c *ishell.Context) {
+			var macAddress string
+			if len(c.Args) > 0 {
+				macAddress = strings.Join(c.Args, " ")
+			}
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			cmdResp, _, err := cx.UAP.RestartAP(ctx, macAddress)
 			if err != nil {
 			}
 			c.ProgressBar().Stop()
