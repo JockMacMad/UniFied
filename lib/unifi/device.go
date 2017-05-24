@@ -1,18 +1,13 @@
 package unifi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/HouzuoGuo/tiedot/db"
 	log "github.com/Sirupsen/logrus"
 	"github.com/fatih/structs"
-	"strconv"
 )
-
-//const devicesBasePath = "/api/s/default/stat/device"
-const devicesBasePath = "/stat/device"
 
 // DeviceService is an interface for interfacing with the Device
 // endpoints of the UniFi API
@@ -199,7 +194,7 @@ type SysStats struct {
 // List all devices
 func (s *DevicesServiceOp) List(ctx context.Context, opt *ListOptions) ([]Device, *Response, error) {
 	//path := devicesBasePath
-	path := *s.buildURL()
+	path := *s.client.buildURL(stateDeviceBasePath)
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -232,7 +227,7 @@ func (s *DevicesServiceOp) List(ctx context.Context, opt *ListOptions) ([]Device
 // List all devices
 func (s *DevicesServiceOp) ListShort(ctx context.Context, filter string, opt *ListOptions) ([]DeviceShort, *Response, error) {
 	//path := devicesBasePath
-	path := *s.buildURL()
+	path := *s.client.buildURL(stateDeviceBasePath)
 	path, err := addOptions(path, opt)
 	if err != nil {
 		return nil, nil, err
@@ -326,7 +321,10 @@ func DevicesDB(s *DevicesServiceOp, root *devicesRoot) *devicesRoot {
 					log.WithFields(log.Fields{
 						"docID":       docID,
 						"Device UUID": v.UUID,
-					}).Info(fmt.Sprintf("Device inserted.", docID, v.UUID))
+					}).Info(fmt.Sprintf(
+						"Device inserted DocId: %s / UUID: %s",
+						docID,
+						v.UUID))
 				}
 				if log.GetLevel() == log.DebugLevel {
 					log.WithFields(log.Fields{
@@ -362,7 +360,7 @@ func (s *DevicesServiceOp) Get(ctx context.Context, id int) (*Device, *Response,
 
 	}
 
-	path := *s.buildURLWithId(id)
+	path := *s.client.buildURLWithId(stateDeviceBasePath, id)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -384,7 +382,7 @@ func (s *DevicesServiceOp) GetByMac(ctx context.Context, mac string) (*Device, *
 
 	}
 
-	path := fmt.Sprintf("%s/%s", *s.buildURL(), mac)
+	path := fmt.Sprintf("%s/%s", *s.client.buildURL(stateDeviceBasePath), mac)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -475,21 +473,3 @@ func (s *DevicesServiceOp) GetState(ctx context.Context, mac string) (string, er
 	return device.State, nil
 }
 */
-
-func (s *DevicesServiceOp) buildURL() *string {
-	var buffer bytes.Buffer
-	buffer.WriteString(s.client.BaseURL.String())
-	buffer.WriteString(*s.client.SiteName)
-	buffer.WriteString(devicesBasePath)
-	path := buffer.String()
-	return &path
-}
-
-func (s *DevicesServiceOp) buildURLWithId(id int) *string {
-	var buffer bytes.Buffer
-	buffer.WriteString(*s.buildURL())
-	buffer.WriteString("/")
-	buffer.WriteString(strconv.Itoa(id))
-	path := buffer.String()
-	return &path
-}

@@ -6,9 +6,6 @@ import (
 	"os"
 )
 
-const loginBasePath = "/api/login"
-const logoutBasePath = "/api/logoff"
-
 // AuthenticateService is an interface for interfacing with the Authentication
 // endpoints of the UniFi API
 // See: https://developers.digitalocean.com/documentation/v2/#account
@@ -64,7 +61,7 @@ func (s *AuthenticateServiceOp) Login(ctx context.Context, username string, pass
 
 // Get an alarm by ID.
 func (s *AuthenticateServiceOp) Logout(ctx context.Context) (*Authentication, *Response, error) {
-	path := fmt.Sprintf("%s/%d", logoutBasePath)
+	path := fmt.Sprintf("%s", logoutBasePath)
 	req, err := s.client.NewRequest(ctx, "POST", path, nil)
 	if err != nil {
 		return nil, nil, err

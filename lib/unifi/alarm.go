@@ -11,9 +11,6 @@ import (
 	"strconv"
 )
 
-//const alarmsBasePath = "/api/s/default/list/alarm"
-const alarmsBasePath = "/list/alarm"
-
 // AlarmsService is an interface for interfacing with the Alarm
 // endpoints of the UniFi API
 // See: https://developers.digitalocean.com/documentation/v2/#account

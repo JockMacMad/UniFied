@@ -21,6 +21,7 @@ import (
 	"os/signal"
 	"reflect"
 	"strconv"
+	"net/http/httputil"
 )
 
 const (
@@ -28,11 +29,8 @@ const (
 	defaultBaseURL = "https://192.168.10.7:8443"
 	userAgent      = "unified/" + libraryVersion
 	mediaType      = "application/json"
-
-	headerRateLimit     = "RateLimit-Limit"
-	headerRateRemaining = "RateLimit-Remaining"
-	headerRateReset     = "RateLimit-Reset"
 )
+
 
 // Simple structure that captures the URL (string) and Port (int) that the DB is running on.
 type UnifiedDBHost struct {
@@ -96,6 +94,7 @@ type UniFiClient struct {
 	// Services used for communicating with the API
 	Alarms         AlarmsService
 	Authentication AuthenticateService
+	ClientDevice   ClientService
 	Devices        DevicesService
 	Events         EventsService
 	Sites          SitesService
@@ -161,6 +160,7 @@ func SetBaseURL(bu string) ClientOpt {
 	}
 }
 
+/*
 // SetUserAgent is a client option for setting the user agent.
 func SetUserAgent(ua string) ClientOpt {
 	return func(c *UniFiClient) error {
@@ -168,6 +168,7 @@ func SetUserAgent(ua string) ClientOpt {
 		return nil
 	}
 }
+*/
 
 // NewUniFiClient returns a new DigitalOcean API client.
 func NewUniFiClient(httpClient *http.Client, options *UnifiedOptions) *UniFiClient {
@@ -192,6 +193,7 @@ func NewUniFiClient(httpClient *http.Client, options *UnifiedOptions) *UniFiClie
 	c.Events = &EventsServiceOp{client: c}
 	c.Users = &UsersServiceOp{client: c}
 	c.UAP = &UAPServiceOp{client: c}
+	c.ClientDevice = &ClientServiceOp{client: c}
 
 	if c.Options.DbUsage.DbUsageEnabled {
 		unfiedDBLocation := "/tmp/UnifiedDB"
@@ -405,22 +407,6 @@ func (r *Response) links() (map[string]headerLink.Link, error) {
 	return map[string]headerLink.Link{}, nil
 }
 
-// populateRate parses the rate related headers and populates the response Rate.
-func (r *Response) populateRate() {
-	if limit := r.Header.Get(headerRateLimit); limit != "" {
-		// r.Rate.Limit, _ = strconv.Atoi(limit)
-	}
-	if remaining := r.Header.Get(headerRateRemaining); remaining != "" {
-		// r.Rate.Remaining, _ = strconv.Atoi(remaining)
-	}
-	if reset := r.Header.Get(headerRateReset); reset != "" {
-		if v, _ := strconv.ParseInt(reset, 10, 64); v != 0 {
-			// TODO: Fix this
-			// r.Rate.Reset = Timestamp{time.Unix(v, 0)}
-		}
-	}
-}
-
 // Do sends an API request and returns the API response. The API response is JSON decoded and stored in the value
 // pointed to by v, or returned as an error if an API error has occurred. If v implements the io.Writer interface,
 // the raw response will be written to v, without attempting to decode it.
@@ -515,34 +501,53 @@ func (c *UniFiClient) Stop() {
 	}
 }
 
-// String is a helper routine that allocates a new string value
-// to store v and returns a pointer to it.
-func String(v string) *string {
-	p := new(string)
-	*p = v
-	return p
-}
-
-// Int is a helper routine that allocates a new int32 value
-// to store v and returns a pointer to it, but unlike Int32
-// its argument value is an int.
-func Int(v int) *int {
-	p := new(int)
-	*p = v
-	return p
-}
-
-// Bool is a helper routine that allocates a new bool value
-// to store v and returns a pointer to it.
-func Bool(v bool) *bool {
-	p := new(bool)
-	*p = v
-	return p
-}
-
 // StreamToString converts a reader to a string
 func StreamToString(stream io.Reader) string {
 	buf := new(bytes.Buffer)
 	_, _ = buf.ReadFrom(stream)
 	return buf.String()
 }
+
+func (c *UniFiClient) buildURL(basePath string) *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(c.BaseURL.String())
+	buffer.WriteString(*c.SiteName)
+	buffer.WriteString(basePath)
+	path := buffer.String()
+	return &path
+}
+
+func (c *UniFiClient) buildURLWithId(basePath string, id int) *string {
+	var buffer bytes.Buffer
+	buffer.WriteString(*c.buildURL(basePath))
+	buffer.WriteString("/")
+	buffer.WriteString(strconv.Itoa(id))
+	path := buffer.String()
+	return &path
+}
+
+func (c *UniFiClient) sendCmd(ctx context.Context, method string, path string, uapCmd interface{}) (*UAPCmdResp, *Response, error) {
+	// Create the HTTP Request
+	req, err := c.NewRequest(ctx, method, path, uapCmd)
+	// Save a copy of this request for debugging.
+	{
+		requestDump, err := httputil.DumpRequest(req, true)
+		if err != nil {
+			log.Debug(err)
+		}
+		log.Debug(string(requestDump))
+	}
+	if err != nil {
+		log.Error(err)
+	}
+	// Create the Response object to hold the results
+	root := new(UAPCmdResp)
+	// Make the HTTP Request to the UniFi Controller
+	resp, err := c.Do(req, root)
+	if err != nil {
+		log.Error(err)
+		return nil, resp, err
+	}
+	return root, resp, err
+}
+
