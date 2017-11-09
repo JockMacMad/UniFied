@@ -29,11 +29,9 @@ var _ AlarmsService = &AlarmsServiceOp{}
 
 type alarmsRoot struct {
 	Alarms []Alarm `json:"data"`
-	//Links  *Links  `json:"links"`
 }
 
 type alarmRoot struct {
-	//Alarm *Alarm `json:"data"`
 	Alarm *Alarm `json:""`
 }
 
@@ -89,6 +87,8 @@ func (s *AlarmsServiceOp) List(ctx context.Context, opt *ListOptions) ([]Alarm, 
 	//log.Debug(root.Alarms)
 	return root.Alarms, resp, err
 }
+
+//
 func AlarmsDB(s *AlarmsServiceOp, root *alarmsRoot) *alarmsRoot {
 	alarmsColExists := false
 	var alarmsDB *db.Col = nil
@@ -172,9 +172,9 @@ func AlarmsDB(s *AlarmsServiceOp, root *alarmsRoot) *alarmsRoot {
 	return root
 }
 
-// Get an alarm by ID.
-func (s *AlarmsServiceOp) Get(ctx context.Context, id int) (*Alarm, *Response, error) {
-	if id < 1 {
+// Get an alarm by its unique UUID.
+func (s *AlarmsServiceOp) Get(ctx context.Context, uuid int) (*Alarm, *Response, error) {
+	if uuid < 1 {
 		return nil, nil, NewArgError("id", "cannot be less than 1")
 	}
 
@@ -183,7 +183,7 @@ func (s *AlarmsServiceOp) Get(ctx context.Context, id int) (*Alarm, *Response, e
 	}
 
 	//path := fmt.Sprintf("%s/%d", alarmsBasePath, id)
-	path := *s.buildURLWithId(id)
+	path := *s.buildURLWithId(uuid)
 	req, err := s.client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, nil, err

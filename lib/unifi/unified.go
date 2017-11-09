@@ -526,7 +526,7 @@ func (c *UniFiClient) buildURLWithId(basePath string, id int) *string {
 	return &path
 }
 
-func (c *UniFiClient) sendCmd(ctx context.Context, method string, path string, uapCmd interface{}) (*UAPCmdResp, *Response, error) {
+func (c *UniFiClient) sendCmd(ctx context.Context, method string, path string, uapCmd interface{}) (*UniFiCmdResp, *Response, error) {
 	// Create the HTTP Request
 	req, err := c.NewRequest(ctx, method, path, uapCmd)
 	// Save a copy of this request for debugging.
@@ -541,7 +541,7 @@ func (c *UniFiClient) sendCmd(ctx context.Context, method string, path string, u
 		log.Error(err)
 	}
 	// Create the Response object to hold the results
-	root := new(UAPCmdResp)
+	root := new(UniFiCmdResp)
 	// Make the HTTP Request to the UniFi Controller
 	resp, err := c.Do(req, root)
 	if err != nil {

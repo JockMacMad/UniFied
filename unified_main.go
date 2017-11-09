@@ -2,6 +2,7 @@ package main
 
 import (
 	shell "bitbucket.org/ecosse-hosting/unified/lib/shell"
+	tftp "bitbucket.org/ecosse-hosting/unified/lib/tftp"
 	unified "bitbucket.org/ecosse-hosting/unified/lib/unifi"
 	"bytes"
 	"context"
@@ -21,6 +22,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"os/exec"
+	"github.com/hashicorp/go-plugin"
+	"bitbucket.org/ecosse-hosting/unified/lib/tftp/spi"
+	tftpclientapi "bitbucket.org/ecosse-hosting/unified/lib/tftp/api"
 )
 
 var (
@@ -47,10 +52,54 @@ var password bool
 var useDBOption bool
 var daemon bool
 
+// handshakeConfigs are used to just do a basic handshake between
+// a plugin and host. If the handshake fails, a user friendly error is shown.
+// This prevents users from executing bad plugins or executing a plugin
+// directory. It is a UX feature, not a security feature.
+var handshakeConfig = plugin.HandshakeConfig{
+	ProtocolVersion:  1,
+	MagicCookieKey:   "BASIC_PLUGIN",
+	MagicCookieValue: "hello",
+}
+
+// pluginMap is the map of plugins we can dispense.
+var pluginMap = map[string]plugin.Plugin{
+	"tftpclient": &spi.TFTPClientPlugin{},
+}
+
+func init() {
+	// We're a host! Start by launching the plugin process.
+	client := plugin.NewClient(&plugin.ClientConfig{
+		HandshakeConfig: handshakeConfig,
+		Plugins:         pluginMap,
+		Cmd:             exec.Command("tftpclient", "tftpclient"),
+	})
+	defer client.Kill()
+
+
+
+	// Connect via RPC
+	rpcClient, err := client.Client()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Request the plugin
+	raw, err := rpcClient.Dispense("tftpclient")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// We should have a TFTPClient now! This feels like a normal interface
+	// implementation but is in fact over an RPC connection.
+	tftpClient := raw.(tftpclientapi.TFTPClient)
+	tftpClient.Connect("127.0.0.1", 69)
+}
+
 func main() {
 	app := cli.App("unified", "Unified CLI for Ubiquiti UniFi")
 	app.Version("v version", "unified 0.0.1")
-	app.Spec = "-u -p -c ([-b -c]) [-s]"
+	app.Spec = "-u -p -c ([-b -x]) [-s]"
 
 	var (
 		useDB = app.Bool(
@@ -65,7 +114,7 @@ func main() {
 
 		useCache = app.Bool(
 			cli.BoolOpt{
-				Name:      "c useCache",
+				Name:      "x useCache",
 				Value:     true,
 				Desc:      "Enable the use of the internal DB for retreiving data. Implies -db.",
 				EnvVar:    "UNIFIED_USE_CACHE",
@@ -163,6 +212,93 @@ func main() {
 			cli.Exit(999)
 		}
 	}
+
+	app.Command("client", "Network client commands on the UniFi Controller.", func(cmd *cli.Cmd) {
+		cmd.Command(
+			"authorize-guest",
+			"Authorizes a client network device. " +
+				"i.e. The device can use the network, is connected and visible in the Controller.",
+			func(cmd3 *cli.Cmd) {
+				cmd3.Spec = "([-a -m -d -u -t])"
+				apMacAddress := cmd3.String(cli.StringOpt{
+					Name:      "a apMac",
+					Desc:      "AP MAC address to which client is connected. " +
+						"(Should result in faster authorization)",
+					Value: "",
+				})
+				downSpeed := cmd3.String(cli.StringOpt{
+					Name:      "d down",
+					Desc:      "Cap the download speed of the client network device.",
+					Value: "",
+				})
+				mBytes := cmd3.String(cli.StringOpt{
+					Name:      "m MB",
+					Desc:      "Cap the client device usage in MB.",
+					Value: "",
+				})
+				time := cmd3.String(cli.StringOpt{
+					Name:      "t time",
+					Desc:      "Cap the client device usage by time (in minutes).",
+					Value: "",
+				})
+				upSpeed := cmd3.String(cli.StringOpt{
+					Name:      "u up",
+					Desc:      "Cap the upload speed of the client network device.",
+					Value: "",
+				})
+				clientMacAddress := cmd3.StringArg("MAC_ADDRESS", "",
+					"The MAC address of the uap device to target.")
+				cmd3.Action = func() {
+					fmt.Println("\nunified client unauthorize-guest MAC_ADDRESS\n")
+					cmdResp, _, err := cx.ClientDevice.AuthorizeGuest(
+						ctx, *clientMacAddress, *time, *upSpeed,
+						*downSpeed, *mBytes, *apMacAddress)
+					if err != nil {}
+					fmt.Println(cmdResp.Meta.Status)
+				}
+			})
+		cmd.Command(
+			"unauthorize-guest",
+			"Unauthorizes a client network device. " +
+				"The device cannot use the network but is connected and visible in the Controller.",
+			func(cmd3 *cli.Cmd) {
+				clientMacAddress := cmd3.StringArg("MAC_ADDRESS", "",
+					"The MAC address of the uap device to target.")
+				cmd3.Action = func() {
+					fmt.Println("\nunified client unauthorize-guest MAC_ADDRESS\n")
+					cmdResp, _, err := cx.ClientDevice.UnauthorizeGuest(ctx, *clientMacAddress)
+					if err != nil {}
+					fmt.Println(cmdResp.Meta.Status)
+				}
+			})
+		cmd.Command(
+			"block",
+			"Blocks a client device from joining the network. " +
+				"The device is not visible on the network when blocked",
+			func(cmd3 *cli.Cmd) {
+				macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+					"The MAC address of the client device to target.")
+				cmd3.Action = func() {
+					fmt.Println("\nunified client block MAC_ADDRESS\n")
+					cmdResp, _, err := cx.ClientDevice.BlockClient(ctx, *macAddress, true)
+					if err != nil {}
+					fmt.Println(cmdResp.Meta.Status)
+				}
+			})
+		cmd.Command(
+			"unblock",
+			"Unblocks a previously blocked client network device.",
+			func(cmd3 *cli.Cmd) {
+				macAddress := cmd3.StringArg("MAC_ADDRESS", "",
+					"The MAC address of the client device to target.")
+				cmd3.Action = func() {
+					fmt.Println("\nunified client unblock MAC_ADDRESS\n")
+					cmdResp, _, err := cx.ClientDevice.BlockClient(ctx, *macAddress, false)
+					if err != nil {}
+					fmt.Println(cmdResp.Meta.Status)
+				}
+			})
+	})
 
 	app.Command("controller", "Manages the Unified Controller.", func(cmd *cli.Cmd) {
 		cmd.Command(
@@ -460,13 +596,13 @@ func main() {
 					"A Command to send to the Unifi UAP.",
 					func(cmd2 *cli.Cmd) {
 						cmd2.Command(
-							"set-locate",
+							"locateOn",
 							"Enables the LED on a UAP to help with locating it.",
 							func(cmd3 *cli.Cmd) {
 								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
 									"The MAC address of the uap device to target.")
 								cmd3.Action = func() {
-									fmt.Println("\nunified devices uap cmd set-locate MAC_ADDRESS\n")
+									fmt.Println("\nunified device uap cmd set-locate MAC_ADDRESS\n")
 									cmdResp, _, err := cx.UAP.SetLocate(ctx, *macAddress, true)
 									if err != nil {
 									}
@@ -474,13 +610,13 @@ func main() {
 								}
 							})
 						cmd2.Command(
-							"unset-locate",
+							"locateOff",
 							"Disables the LED on a UAP to help with locating it.",
 							func(cmd3 *cli.Cmd) {
 								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
 									"The MAC address of the uap device to target.")
 								cmd3.Action = func() {
-									fmt.Println("\nunified devices uap cmd unset-locate MAC_ADDRESS\n")
+									fmt.Println("\nunified device uap cmd unset-locate MAC_ADDRESS\n")
 									cmdResp, _, err := cx.UAP.SetLocate(ctx, *macAddress, false)
 									if err != nil {
 
@@ -495,7 +631,7 @@ func main() {
 								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
 									"The MAC address of the uap device to target.")
 								cmd3.Action = func() {
-									fmt.Println("\nunified devices uap cmd disable MAC_ADDRESS\n")
+									fmt.Println("\nunified device uap cmd disable MAC_ADDRESS\n")
 									cmdResp, _, err := cx.UAP.DisableAP(ctx, *macAddress, true)
 									if err != nil {
 
@@ -510,7 +646,7 @@ func main() {
 								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
 									"The MAC address of the uap device to target.")
 								cmd3.Action = func() {
-									fmt.Println("\nunified devices uap cmd enable MAC_ADDRESS\n")
+									fmt.Println("\nunified device uap cmd enable MAC_ADDRESS\n")
 									cmdResp, _, err := cx.UAP.DisableAP(ctx, *macAddress, false)
 									if err != nil {
 
@@ -525,7 +661,7 @@ func main() {
 								macAddress := cmd3.StringArg("MAC_ADDRESS", "",
 									"The MAC address of the uap device to target.")
 								cmd3.Action = func() {
-									fmt.Println("\nunified devices uap cmd restartr MAC_ADDRESS\n")
+									fmt.Println("\nunified device uap cmd restartr MAC_ADDRESS\n")
 									cmdResp, _, err := cx.UAP.RestartAP(ctx, *macAddress)
 									if err != nil {
 
@@ -650,6 +786,104 @@ func main() {
 			addShellCommands(shell)
 			shell.Start()
 		}
+	})
+
+	app.Command("tftp", "TFTP based commands.", func(cmd *cli.Cmd) {
+		cmd.Command(
+			"server",
+			"TFTP Server commands.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"start",
+					"Starts a TFTP Server.",
+					func(cmd3 *cli.Cmd) {
+						filename := cmd3.StringArg("FILENAME", "",
+							"The file to serve over TFTP.")
+						cmd3.Spec = "FILENAME"
+						cmd3.Action = func() {
+							fmt.Println("\nunified tftp server start\n")
+							fmt.Println(filename)
+							srv, err := tftp.NewTFTPServer()
+							if err != nil {
+
+							}
+							done := make(chan bool, 1)
+							var isDone bool = false
+							srv.Serve(done)
+							for !isDone {
+								isDone =  <- done
+							}
+							/*alarms, _, err := cx.Alarms.List(ctx, nil)
+							if err != nil {
+
+							}
+							for _, v := range alarms {
+								table := tablewriter.NewWriter(os.Stdout)
+								fieldNames := structs.Names(&v)
+								table.SetHeader(fieldNames)
+
+								fieldValues := structs.Values(&v)
+								valuesArray := make([]string, len(fieldValues))
+								for k, w := range fieldValues {
+									switch x := w.(type) {
+									case string:
+										valuesArray[k] = x
+									case bool:
+										valuesArray[k] = strconv.FormatBool(x)
+									case int:
+										valuesArray[k] = strconv.Itoa(x)
+									}
+								}
+								table.Append(valuesArray)
+								table.Render() // Send output
+							}
+							*/
+						}
+					})
+			})
+		cmd.Command(
+			"client",
+			"TFTP Client commands.",
+			func(cmd2 *cli.Cmd) {
+				cmd2.Command(
+					"download",
+					"Starts a TFTP download to the Client from the Server.",
+					func(cmd3 *cli.Cmd) {
+						filename := *cmd3.StringArg("FILENAME", "",
+							"The file to serve over TFTP.")
+						cmd3.Spec = "FILENAME"
+						cmd3.Action = func() {
+							fmt.Println("\nunified tftp client download FILENAME\n")
+							fmt.Println(filename)
+							tftp.TFTPDownloadFromServer("127.0.0.1", 69, filename)
+							/*alarms, _, err := cx.Alarms.List(ctx, nil)
+							if err != nil {
+
+							}
+							for _, v := range alarms {
+								table := tablewriter.NewWriter(os.Stdout)
+								fieldNames := structs.Names(&v)
+								table.SetHeader(fieldNames)
+
+								fieldValues := structs.Values(&v)
+								valuesArray := make([]string, len(fieldValues))
+								for k, w := range fieldValues {
+									switch x := w.(type) {
+									case string:
+										valuesArray[k] = x
+									case bool:
+										valuesArray[k] = strconv.FormatBool(x)
+									case int:
+										valuesArray[k] = strconv.Itoa(x)
+									}
+								}
+								table.Append(valuesArray)
+								table.Render() // Send output
+							}
+							*/
+						}
+					})
+			})
 	})
 
 	app.Run(os.Args)
@@ -1300,7 +1534,7 @@ func main() {
 }
 */
 
-func CmdRespToJSON(resp *unified.UAPCmdResp) {
+func CmdRespToJSON(resp *unified.UniFiCmdResp) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "    ")
 	enc.Encode(resp)
@@ -1364,11 +1598,110 @@ func outputDevicesToTable(devices []unified.DeviceShort) {
 }
 
 func addShellCommands(shell *ishell.Shell) {
-
-	devicesCmd := addDevicesCommand()
-
-	shell.AddCmd(devicesCmd)
+	shell.AddCmd(addClientCommand())
+	shell.AddCmd(addDevicesCommand())
 }
+
+
+func addClientCommand() *ishell.Cmd {
+	clientCmd := &ishell.Cmd{
+		Name: "client",
+		Help: "Network client commands.",
+	}
+	clientCmd.AddCmd(&ishell.Cmd{
+		Name: "authorize-guest",
+		Help: "Authorize a network client device. " +
+			"Deivce can connect to the network but send/receive is disabled. " +
+			"(It is visible in the UniFi Controller)",
+		Func: func(c *ishell.Context) {
+			var macAddress string
+			if len(c.Args) > 0 {
+				macAddress = strings.Join(c.Args, " ")
+			}
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			cmdResp, _, err := cx.ClientDevice.BlockClient(ctx, macAddress, true)
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error sending Command ", "authorize", " to ", "client",
+					" device from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			c.Println(cmdResp.Meta.Status)
+		},
+	})
+	clientCmd.AddCmd(&ishell.Cmd{
+		Name: "unauthorize-guest",
+		Help: "Unauthorize a network client device.",
+		Func: func(c *ishell.Context) {
+			var macAddress string
+			if len(c.Args) > 0 {
+				macAddress = strings.Join(c.Args, " ")
+			}
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			cmdResp, _, err := cx.ClientDevice.BlockClient(ctx, macAddress, false)
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error sending Command ", "unauthorize", " to ", "client",
+					" device from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			c.Println(cmdResp.Meta.Status)
+		},
+	})
+	clientCmd.AddCmd(&ishell.Cmd{
+		Name: "block",
+		Help: "Block a network client device. Deivce cannot connect to the network." +
+			" (It is no longer visible in the UniFi Controller)",
+		Func: func(c *ishell.Context) {
+			var macAddress string
+			if len(c.Args) > 0 {
+				macAddress = strings.Join(c.Args, " ")
+			}
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			cmdResp, _, err := cx.ClientDevice.BlockClient(ctx, macAddress, true)
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error sending Command ", "block", " to ", "client",
+					" device from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			c.Println(cmdResp.Meta.Status)
+		},
+	})
+	clientCmd.AddCmd(&ishell.Cmd{
+		Name: "unblock",
+		Help: "Unblock a previously blocked network client device.",
+		Func: func(c *ishell.Context) {
+			var macAddress string
+			if len(c.Args) > 0 {
+				macAddress = strings.Join(c.Args, " ")
+			}
+			c.ProgressBar().Indeterminate(true)
+			c.ProgressBar().Start()
+			cmdResp, _, err := cx.ClientDevice.BlockClient(ctx, macAddress, false)
+			c.ProgressBar().Stop()
+			if err != nil {
+				color.Set(color.FgRed)
+				msgParts := []string{"Error sending Command ", "unblock", " to ", "client",
+					" device from Unifi Controller."}
+				c.Println(strings.Join(msgParts, " "))
+				color.Set(color.FgWhite)
+			}
+			c.Println(cmdResp.Meta.Status)
+		},
+	})
+	return clientCmd
+}
+
 func addDevicesCommand() *ishell.Cmd {
 	devicesCmd := &ishell.Cmd{
 		Name: "device",
@@ -1471,13 +1804,13 @@ func addUAPCommands() *ishell.Cmd {
 	}
 
 	uapSetLocateCmd := devicesLocateCmd(
-		"set-locate",
+		"locateOn",
 		"Enables the LED on a UAP to help with locating it.",
 		"uap",
 		true,
 	)
 	uapUnsetLocateCmd := devicesLocateCmd(
-		"unset-locate",
+		"locateOff",
 		"Disables the LED on a UAP to help with locating it.",
 		"uap",
 		false,

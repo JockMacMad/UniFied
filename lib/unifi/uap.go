@@ -9,10 +9,11 @@ import (
 // UAPService is an interface for interfacing with the UAP specific Device
 // endpoints of the UniFi API
 type UAPService interface {
-	DisableAP(ctx context.Context, macAddress string, disabled bool) (*UAPCmdResp, *Response, error)
+	DisableAP(ctx context.Context, macAddress string, disabled bool) (*UniFiCmdResp, *Response, error)
 	IsLocating(ctx context.Context, macAddress string) (bool, error)
-	RestartAP(ctx context.Context, macAddress string) (*UAPCmdResp, *Response, error)
-	SetLocate(ctx context.Context, macAddress string, enabled bool) (*UAPCmdResp, *Response, error)
+	RenameAP(ctx context.Context, macAddress string, newName string) (*UniFiCmdResp, *Response, error)
+	RestartAP(ctx context.Context, macAddress string) (*UniFiCmdResp, *Response, error)
+	SetLocate(ctx context.Context, macAddress string, enabled bool) (*UniFiCmdResp, *Response, error)
 }
 
 // UAPServiceOp handles communication with the Alarm related methods of
@@ -28,11 +29,11 @@ type UAP struct {
 
 var _ UAPService = &UAPServiceOp{}
 
-//
+// Disables a UniFi Acess Point which remains visible on the network & in the UniFi Controller.
 func (uap *UAPServiceOp) DisableAP(
 	ctx context.Context,
 	macAddress string,
-	disable bool) (*UAPCmdResp, *Response, error) {
+	disable bool) (*UniFiCmdResp, *Response, error) {
 
 	uuid, err := uap.client.Devices.GetUUIDFromMac(ctx, macAddress)
 	if err != nil {
@@ -63,10 +64,10 @@ func (uap *UAPServiceOp) IsLocating(ctx context.Context, macAddress string) (boo
 func (uap *UAPServiceOp) SetLocate(
 	ctx context.Context,
 	macAddress string,
-	enabled bool) (*UAPCmdResp, *Response, error) {
+	enabled bool) (*UniFiCmdResp, *Response, error) {
 
 	path := fmt.Sprintf("%s/%s", *uap.client.buildURL(devMgrCmdBasePath), macAddress)
-	uapCmd := new(UAPCmd)
+	uapCmd := new(UniFiCmd)
 	uapCmd.MacAddress = macAddress
 	// If enabled is true the command is 'set-locate' to start flashing the APs LED
 	if enabled {
@@ -82,11 +83,25 @@ func (uap *UAPServiceOp) SetLocate(
 // Restarts i.e. reboots, the UniFi AP locating function to On or Off i.e. it is flashing it's LED in order
 // someone can physically locate it visibly.
 // macAddress is the MAC Address of the AP to configure
-func (uap *UAPServiceOp) RestartAP(ctx context.Context, macAddress string) (*UAPCmdResp, *Response, error) {
+func (uap *UAPServiceOp) RestartAP(ctx context.Context, macAddress string) (*UniFiCmdResp, *Response, error) {
 	path := fmt.Sprintf("%s/%s", *uap.client.buildURL(devMgrCmdBasePath), macAddress)
-	uapCmd := new(UAPCmd)
+	uapCmd := new(UniFiCmd)
 	uapCmd.MacAddress = macAddress
 	uapCmd.Cmd = "restart"
+
+	return uap.client.sendCmd(ctx, "POST", path, uapCmd)
+}
+
+// Renames the UniFi AP
+// macAddress is the MAC Address of the AP to configure
+func (uap *UAPServiceOp) RenameAP(ctx context.Context, macAddress string, newName string) (*UniFiCmdResp, *Response, error) {
+	uuid, err := uap.client.Devices.GetUUIDFromMac(ctx, macAddress)
+	if err != nil {
+		log.Error(err)
+	}
+	uapCmd := new(UAPCmdRenameAP)
+	path := fmt.Sprintf("%s/%s", *uap.client.buildURL(restDeviceCmdBasePath), uuid)
+	uapCmd.Name = newName
 
 	return uap.client.sendCmd(ctx, "POST", path, uapCmd)
 }
